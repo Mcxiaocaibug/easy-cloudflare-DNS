@@ -1,7 +1,8 @@
 # 🌐 Cloudflare DNS管理系统
 
 一个基于PHP开发的专业DNS记录管理平台，支持Cloudflare API集成、用户积分系统、批量同步等功能。
-
+##  演示地址
+https://dns.6qu.cc/
 ## ✨ 主要特性
 
 ### 🎯 **核心功能**
