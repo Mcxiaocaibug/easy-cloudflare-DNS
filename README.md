@@ -186,18 +186,6 @@ http://yourdomain.com/install.php
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
 5. 创建 Pull Request
 
-### **开发环境**
-```bash
-# 克隆开发版本
-git clone https://github.com/976853694/cloudflare-DNS.git
-cd cloudflare-dns-manager
-
-# 创建开发分支
-git checkout -b develop
-
-# 安装开发依赖（如果有）
-# composer install --dev
-```
 
 ## 📄 许可证
 
