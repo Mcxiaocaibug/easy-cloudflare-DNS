@@ -146,7 +146,16 @@ class CloudflareAPI {
     /**
      * 更新DNS记录
      */
-    public function updateDNSRecord($zone_id, $record_id, $type, $name, $content, $proxied = false) {
+    public function updateDNSRecord($zone_id, $record_id, $type, $name = null, $content = null, $proxied = false) {
+        // 兼容数组参数调用方式
+        if (is_array($type)) {
+            $params = $type;
+            $type = $params['type'];
+            $name = $params['name'];
+            $content = $params['content'];
+            $proxied = $params['proxied'] ?? false;
+        }
+        
         $data = [
             'type' => $type,
             'name' => $name,
