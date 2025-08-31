@@ -42,7 +42,7 @@
 
 1. **克隆项目**
 ```bash
-git clone https://github.com/yourusername/cloudflare-dns-manager.git
+git clone https://github.com/976853694/cloudflare-DNS.git
 cd cloudflare-dns-manager
 ```
 
@@ -189,7 +189,7 @@ http://yourdomain.com/install.php
 ### **开发环境**
 ```bash
 # 克隆开发版本
-git clone https://github.com/yourusername/cloudflare-dns-manager.git
+git clone https://github.com/976853694/cloudflare-DNS.git
 cd cloudflare-dns-manager
 
 # 创建开发分支
@@ -213,9 +213,9 @@ git checkout -b develop
 
 如果您在使用过程中遇到问题，请：
 
-1. 查看 [Wiki](https://github.com/yourusername/cloudflare-dns-manager/wiki)
-2. 搜索 [Issues](https://github.com/yourusername/cloudflare-dns-manager/issues)
-3. 创建新的 [Issue](https://github.com/yourusername/cloudflare-dns-manager/issues/new)
+1. 查看 [Wiki](https://github.com/976853694/cloudflare-DNSwiki)
+2. 搜索 [Issues](https://github.com/976853694/cloudflare-DNS/issues)
+3. 创建新的 [Issue](https://github.com/976853694/cloudflare-DNS/issues/new)
 
 ---
 
