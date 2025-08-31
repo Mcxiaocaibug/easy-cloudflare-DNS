@@ -46,6 +46,7 @@ class Database {
     private function initTables() {
         // 数据库表初始化代码
         // 实际配置请参考原始 database.php 文件
+        // 注意：dns_records 表应包含 remark, ttl, priority 等字段
     }
 }
 ?>
