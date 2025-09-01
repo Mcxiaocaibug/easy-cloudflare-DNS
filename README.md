@@ -170,3 +170,6 @@ http://yourdomain.com/install.php
 - **CloudflareAPI** - Cloudflare API封装
 - **Security** - 安全验证和保护
 - **Functions** - 通用工具函数
+
+## Stargazers over time
+[![Stargazers over time](https://starchart.cc/976853694/cloudflare-DNS.svg?variant=adaptive)](https://starchart.cc/976853694/cloudflare-DNS)
