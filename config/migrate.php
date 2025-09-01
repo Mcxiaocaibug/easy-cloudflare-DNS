@@ -79,6 +79,11 @@ function migrateDatabase() {
             echo "✓ 添加dns_records.updated_at列\n";
         }
         
+        if (!in_array('remark', $record_columns)) {
+            $db->exec("ALTER TABLE dns_records ADD COLUMN remark TEXT DEFAULT ''");
+            echo "✓ 添加dns_records.remark列\n";
+        }
+        
         // 创建管理员表（如果不存在）
         $db->exec("CREATE TABLE IF NOT EXISTS admins (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

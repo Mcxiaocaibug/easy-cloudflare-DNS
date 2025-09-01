@@ -564,7 +564,7 @@ function viewInvitationDetails(code, invitationId) {
     modal.className = 'modal fade';
     modal.id = 'invitationDetailsModal';
     modal.innerHTML = `
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
@@ -585,6 +585,9 @@ function viewInvitationDetails(code, invitationId) {
                     <button type="button" class="btn btn-primary" onclick="copyInvitationLink('${code}')">
                         <i class="fas fa-copy me-2"></i>复制邀请链接
                     </button>
+                    <button type="button" class="btn btn-info" onclick="viewInvitationHistory(${invitationId})">
+                        <i class="fas fa-history me-2"></i>查看历史
+                    </button>
                 </div>
             </div>
         </div>
@@ -594,60 +597,173 @@ function viewInvitationDetails(code, invitationId) {
     const bsModal = new bootstrap.Modal(modal);
     bsModal.show();
     
-    // 模拟加载详情数据
-    setTimeout(() => {
-        const modalBody = modal.querySelector('.modal-body');
-        const baseUrl = window.location.origin + window.location.pathname.replace('/admin/invitations.php', '');
-        const inviteUrl = baseUrl + '/user/login.php?invite=' + code;
-        
-        modalBody.innerHTML = `
-            <div class="row">
-                <div class="col-md-6">
-                    <h6 class="text-primary mb-3">
-                        <i class="fas fa-ticket-alt me-2"></i>邀请码信息
-                    </h6>
-                    <div class="card bg-light">
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">邀请码</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" value="${code}" readonly>
-                                    <button class="btn btn-outline-secondary" onclick="copyToClipboard('${code}', '邀请码已复制')" title="复制邀请码">
-                                        <i class="fas fa-copy"></i>
-                                    </button>
+    // 从API获取详情数据
+    fetch(`api/invitation_details.php?id=${invitationId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            const modalBody = modal.querySelector('.modal-body');
+            const invitation = data.invitation;
+            const stats = data.statistics;
+            const history = data.usage_history;
+            
+            const baseUrl = window.location.origin + window.location.pathname.replace('/admin/invitations.php', '');
+            const inviteUrl = baseUrl + '/user/login.php?invite=' + code;
+            
+            modalBody.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary mb-3">
+                            <i class="fas fa-ticket-alt me-2"></i>邀请码信息
+                        </h6>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">邀请人</label>
+                                    <div class="text-success fw-bold">
+                                        <i class="fas fa-user me-1"></i>${invitation.inviter_username}
+                                        <span class="badge bg-info ms-2">${invitation.inviter_points} 积分</span>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">邀请链接</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" value="${inviteUrl}" readonly>
-                                    <button class="btn btn-outline-primary" onclick="copyInvitationLink('${code}')" title="复制邀请链接">
-                                        <i class="fas fa-link"></i>
-                                    </button>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">邀请码</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" value="${code}" readonly>
+                                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('${code}', '邀请码已复制')" title="复制邀请码">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">邀请链接</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" value="${inviteUrl}" readonly>
+                                        <button class="btn btn-outline-primary" onclick="copyInvitationLink('${code}')" title="复制邀请链接">
+                                            <i class="fas fa-link"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">状态</label>
+                                    <div>
+                                        ${invitation.is_active ? 
+                                            '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>活跃</span>' : 
+                                            '<span class="badge bg-secondary"><i class="fas fa-times-circle me-1"></i>禁用</span>'
+                                        }
+                                    </div>
+                                </div>
+                                <div class="mb-0">
+                                    <label class="form-label fw-bold">创建时间</label>
+                                    <div class="text-muted">${invitation.created_at}</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="col-md-6">
-                    <h6 class="text-success mb-3">
-                        <i class="fas fa-chart-bar me-2"></i>管理操作
-                    </h6>
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-outline-warning" onclick="toggleInvitationStatus(${invitationId})">
-                            <i class="fas fa-toggle-on me-2"></i>切换状态
-                        </button>
-                        <button class="btn btn-outline-info" onclick="viewInvitationHistory(${invitationId})">
-                            <i class="fas fa-history me-2"></i>查看历史
-                        </button>
-                        <button class="btn btn-outline-success" onclick="copyInvitationLink('${code}')">
-                            <i class="fas fa-share-alt me-2"></i>分享链接
-                        </button>
+                    <div class="col-md-6">
+                        <h6 class="text-success mb-3">
+                            <i class="fas fa-chart-bar me-2"></i>使用统计
+                        </h6>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="row text-center mb-3">
+                                    <div class="col-4">
+                                        <h4 class="text-primary mb-1">${stats.total_uses}</h4>
+                                        <small class="text-muted">总使用次数</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <h4 class="text-info mb-1">${stats.unique_users}</h4>
+                                        <small class="text-muted">邀请用户数</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <h4 class="text-success mb-1">${stats.total_rewards}</h4>
+                                        <small class="text-muted">获得积分</small>
+                                    </div>
+                                </div>
+                                ${stats.last_used_at ? `
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-clock me-1"></i>最后使用：${stats.last_used_at}
+                                        </small>
+                                    </div>
+                                ` : ''}
+                                ${stats.first_used_at ? `
+                                    <div class="mb-0">
+                                        <small class="text-muted">
+                                            <i class="fas fa-history me-1"></i>首次使用：${stats.first_used_at}
+                                        </small>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6 class="text-info mb-3">
+                                <i class="fas fa-cog me-2"></i>管理操作
+                            </h6>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-warning" onclick="toggleInvitationStatus(${invitationId})">
+                                    <i class="fas fa-toggle-on me-2"></i>切换状态
+                                </button>
+                                <button class="btn btn-outline-info" onclick="viewInvitationHistory(${invitationId})">
+                                    <i class="fas fa-history me-2"></i>查看完整历史
+                                </button>
+                                <button class="btn btn-outline-success" onclick="copyInvitationLink('${code}')">
+                                    <i class="fas fa-share-alt me-2"></i>分享链接
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
-    }, 1000);
+                
+                ${history.length > 0 ? `
+                    <hr class="my-4">
+                    <h6 class="text-warning mb-3">
+                        <i class="fas fa-history me-2"></i>最近使用记录
+                    </h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>用户</th>
+                                    <th>使用时间</th>
+                                    <th>奖励积分</th>
+                                    <th>IP地址</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${history.slice(0, 10).map(record => `
+                                    <tr>
+                                        <td><i class="fas fa-user me-1"></i>${record.invitee_username}</td>
+                                        <td>${record.used_at}</td>
+                                        <td><span class="badge bg-success">+${record.reward_points}</span></td>
+                                        <td><small class="text-muted">${record.ip_address}</small></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        ${history.length > 10 ? `
+                            <div class="text-center">
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewInvitationHistory(${invitationId})">
+                                    查看全部 ${history.length} 条记录
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : '<div class="alert alert-info mt-4"><i class="fas fa-info-circle me-2"></i>暂无使用记录</div>'}
+            `;
+        })
+        .catch(error => {
+            const modalBody = modal.querySelector('.modal-body');
+            modalBody.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    加载失败：${error.message}
+                </div>
+            `;
+        });
     
     // 模态框关闭时移除
     modal.addEventListener('hidden.bs.modal', function() {

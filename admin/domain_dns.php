@@ -27,24 +27,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
     $type = getPost('type');
     $content = getPost('content');
     $proxied = getPost('proxied', 0);
+    $remark = getPost('remark', '');
     
     if ($subdomain && $type && $content) {
         try {
             // 构建完整的记录名称
             $full_name = $subdomain === '@' ? $domain['domain_name'] : $subdomain . '.' . $domain['domain_name'];
             
+            // 检查是否已存在冲突的DNS记录
+            $existing_records = $cf->getDNSRecords($domain['zone_id']);
+            $conflict_found = false;
+            $existing_record = null;
+            
+            foreach ($existing_records as $record) {
+                if (strtolower($record['name']) === strtolower($full_name)) {
+                    $record_type = strtoupper($record['type']);
+                    $target_type = strtoupper($type);
+                    
+                    // A、AAAA、CNAME记录之间会冲突
+                    $conflicting_types = ['A', 'AAAA', 'CNAME'];
+                    
+                    if (in_array($record_type, $conflicting_types) && in_array($target_type, $conflicting_types)) {
+                        $conflict_found = true;
+                        $existing_record = $record;
+                        break;
+                    }
+                    
+                    // 完全相同的记录类型和内容
+                    if ($record_type === $target_type) {
+                        if ($record['content'] === $content) {
+                            throw new Exception("相同的DNS记录已存在！记录名称: {$full_name}, 类型: {$type}, 内容: {$content}");
+                        } else {
+                            $conflict_found = true;
+                            $existing_record = $record;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if ($conflict_found) {
+                $conflict_msg = "DNS记录冲突：域名 '{$full_name}' 已存在 {$existing_record['type']} 记录";
+                $conflict_msg .= "（内容: {$existing_record['content']}）";
+                $conflict_msg .= "。无法添加 {$type} 记录到相同名称。";
+                $conflict_msg .= "建议：1) 使用不同的子域名前缀；2) 删除现有记录后重新添加；3) 使用编辑功能修改现有记录。";
+                throw new Exception($conflict_msg);
+            }
+            
+            // 某些记录类型不能启用代理
+            $non_proxiable_types = ['NS', 'MX', 'TXT', 'SRV', 'CAA'];
+            $final_proxied = in_array(strtoupper($type), $non_proxiable_types) ? false : (bool)$proxied;
+            
             // 通过Cloudflare API添加记录
-            $result = $cf->addDNSRecord($domain['zone_id'], $type, $full_name, $content, (bool)$proxied);
+            $result = $cf->addDNSRecord($domain['zone_id'], $type, $full_name, $content, $final_proxied);
             
             // 保存到本地数据库
-            $stmt = $db->prepare("INSERT INTO dns_records (user_id, domain_id, subdomain, type, content, proxied, cloudflare_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $db->prepare("INSERT INTO dns_records (user_id, domain_id, subdomain, type, content, proxied, cloudflare_id, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->bindValue(1, 0, SQLITE3_INTEGER); // 管理员添加的记录，user_id为0
             $stmt->bindValue(2, $domain_id, SQLITE3_INTEGER);
             $stmt->bindValue(3, $subdomain, SQLITE3_TEXT);
             $stmt->bindValue(4, $type, SQLITE3_TEXT);
             $stmt->bindValue(5, $content, SQLITE3_TEXT);
-            $stmt->bindValue(6, $proxied, SQLITE3_INTEGER);
+            $stmt->bindValue(6, $final_proxied ? 1 : 0, SQLITE3_INTEGER);
             $stmt->bindValue(7, $result['id'], SQLITE3_TEXT);
+            $stmt->bindValue(8, $remark, SQLITE3_TEXT);
             
             if ($stmt->execute()) {
                 logAction('admin', $_SESSION['admin_id'], 'add_dns_record', "为域名 {$domain['domain_name']} 添加DNS记录: $subdomain.$type");
@@ -368,6 +414,11 @@ include 'includes/header.php';
                         <label for="content" class="form-label">记录内容</label>
                         <input type="text" class="form-control" id="content" name="content" placeholder="记录值" required>
                         <div class="form-text">A记录填写IP地址，CNAME记录填写目标域名</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="remark" class="form-label">备注 <span class="text-muted">(可选)</span></label>
+                        <input type="text" class="form-control" id="remark" name="remark" placeholder="例如：网站主页、API接口、邮件服务器等" maxlength="100">
+                        <div class="form-text">添加备注可以帮助您区分不同解析记录的用途</div>
                     </div>
                     <div class="mb-3">
                         <div class="form-check">

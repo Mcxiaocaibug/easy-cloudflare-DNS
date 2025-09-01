@@ -78,7 +78,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             $cf = new CloudflareAPI($current_domain['api_key'], $current_domain['email']);
             $full_name = $subdomain === '@' ? $current_domain['domain_name'] : $subdomain . '.' . $current_domain['domain_name'];
             
-            $result = $cf->addDNSRecord($current_domain['zone_id'], $type, $full_name, $content, (bool)$proxied);
+            // 检查是否已存在冲突的DNS记录
+            $existing_records = $cf->getDNSRecords($current_domain['zone_id']);
+            $conflict_found = false;
+            $existing_record = null;
+            
+            foreach ($existing_records as $record) {
+                if (strtolower($record['name']) === strtolower($full_name)) {
+                    $record_type = strtoupper($record['type']);
+                    $target_type = strtoupper($type);
+                    
+                    // A、AAAA、CNAME记录之间会冲突
+                    $conflicting_types = ['A', 'AAAA', 'CNAME'];
+                    
+                    if (in_array($record_type, $conflicting_types) && in_array($target_type, $conflicting_types)) {
+                        $conflict_found = true;
+                        $existing_record = $record;
+                        break;
+                    }
+                    
+                    // 完全相同的记录类型和内容
+                    if ($record_type === $target_type) {
+                        if ($record['content'] === $content) {
+                            throw new Exception("相同的DNS记录已存在！记录名称: {$full_name}, 类型: {$type}, 内容: {$content}");
+                        } else {
+                            $conflict_found = true;
+                            $existing_record = $record;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if ($conflict_found) {
+                $conflict_msg = "DNS记录冲突：域名 '{$full_name}' 已存在 {$existing_record['type']} 记录";
+                $conflict_msg .= "（内容: {$existing_record['content']}）";
+                $conflict_msg .= "。无法添加 {$type} 记录到相同名称。";
+                $conflict_msg .= "建议：1) 使用不同的子域名前缀；2) 删除现有记录后重新添加；3) 使用编辑功能修改现有记录。";
+                throw new Exception($conflict_msg);
+            }
+            
+            // 某些记录类型不能启用代理
+            $non_proxiable_types = ['NS', 'MX', 'TXT', 'SRV', 'CAA'];
+            $final_proxied = in_array(strtoupper($type), $non_proxiable_types) ? false : (bool)$proxied;
+            
+            $result = $cf->addDNSRecord($current_domain['zone_id'], $type, $full_name, $content, $final_proxied);
             
             // 保存到数据库
             $stmt = $db->prepare("INSERT INTO dns_records (user_id, domain_id, subdomain, type, content, proxied, cloudflare_id, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
@@ -87,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             $stmt->bindValue(3, $subdomain, SQLITE3_TEXT);
             $stmt->bindValue(4, $type, SQLITE3_TEXT);
             $stmt->bindValue(5, $content, SQLITE3_TEXT);
-            $stmt->bindValue(6, $proxied, SQLITE3_INTEGER);
+            $stmt->bindValue(6, $final_proxied ? 1 : 0, SQLITE3_INTEGER);
             $stmt->bindValue(7, $result['id'], SQLITE3_TEXT);
             $stmt->bindValue(8, $remark, SQLITE3_TEXT);
             
@@ -389,10 +433,11 @@ include 'includes/header.php';
                             <input type="text" class="form-control" id="subdomain" name="subdomain" 
                                    placeholder="www" 
                                    value="<?php echo $auto_fill_mode ? htmlspecialchars($auto_prefix) : ''; ?>" 
-                                   required>
+                                   required oninput="checkAndUpdateConflict()">
                             <span class="input-group-text">.<?php echo htmlspecialchars($current_domain['domain_name']); ?></span>
                         </div>
                         <div class="form-text">输入 @ 表示根域名</div>
+                        <div id="conflict-warning-add" style="display: none;"></div>
                         <?php if ($auto_fill_mode): ?>
                         <div class="alert alert-success mt-2">
                             <i class="fas fa-magic me-2"></i>已自动填入前缀：<strong><?php echo htmlspecialchars($auto_prefix); ?></strong>
@@ -401,7 +446,7 @@ include 'includes/header.php';
                     </div>
                     <div class="mb-3">
                         <label for="type" class="form-label">记录类型</label>
-                        <select class="form-select" id="type" name="type" required onchange="updateContentPlaceholder()">
+                        <select class="form-select" id="type" name="type" required onchange="updateContentPlaceholder(); checkAndUpdateConflict();">
                             <?php if (empty($enabled_dns_types)): ?>
                                 <option value="">暂无可用的记录类型</option>
                             <?php else: ?>
@@ -421,7 +466,7 @@ include 'includes/header.php';
                     </div>
                     <div class="mb-3">
                         <label for="content" class="form-label">记录值</label>
-                        <input type="text" class="form-control" id="content" name="content" placeholder="192.168.1.1" required>
+                        <input type="text" class="form-control" id="content" name="content" placeholder="192.168.1.1" required oninput="checkAndUpdateConflict()">
                         <div class="form-text" id="content-help">
                             请输入对应记录类型的值
                         </div>
@@ -438,6 +483,10 @@ include 'includes/header.php';
                             <label class="form-check-label" for="proxied">
                                 启用Cloudflare代理
                             </label>
+                        </div>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            仅A、AAAA、CNAME记录支持代理功能。NS、MX、TXT、SRV等记录类型会自动禁用代理。
                         </div>
                     </div>
                 </div>
@@ -919,6 +968,130 @@ function formatDateTime(dateString) {
         hour: '2-digit',
         minute: '2-digit'
     });
+}
+
+// DNS冲突检测功能
+function checkDNSConflict(subdomain, type, content) {
+    if (!subdomain || !type || !content) return { hasConflict: false };
+    
+    const domainName = '<?php echo addslashes($current_domain['domain_name'] ?? ''); ?>';
+    const fullName = subdomain === '@' ? domainName : `${subdomain}.${domainName}`;
+    const targetType = type.toUpperCase();
+    const conflictingTypes = ['A', 'AAAA', 'CNAME'];
+    
+    // 获取现有记录（从页面表格中提取）
+    const existingRecords = [];
+    const tableRows = document.querySelectorAll('table tbody tr');
+    
+    tableRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 3) {
+            const recordName = cells[0].textContent.trim();
+            const recordType = cells[1].textContent.trim().toUpperCase();
+            const recordContent = cells[2].textContent.trim();
+            
+            existingRecords.push({
+                name: recordName,
+                type: recordType,
+                content: recordContent
+            });
+        }
+    });
+    
+    // 检查冲突
+    for (const record of existingRecords) {
+        if (record.name.toLowerCase() === fullName.toLowerCase()) {
+            // 检查类型冲突
+            if (conflictingTypes.includes(record.type) && conflictingTypes.includes(targetType)) {
+                return {
+                    hasConflict: true,
+                    type: 'type_conflict',
+                    existingRecord: record,
+                    message: `域名 '${fullName}' 已存在 ${record.type} 记录，无法添加 ${targetType} 记录`
+                };
+            }
+            
+            // 检查完全相同的记录
+            if (record.type === targetType) {
+                if (record.content === content) {
+                    return {
+                        hasConflict: true,
+                        type: 'exact_match',
+                        existingRecord: record,
+                        message: `完全相同的DNS记录已存在`
+                    };
+                } else {
+                    return {
+                        hasConflict: true,
+                        type: 'same_type',
+                        existingRecord: record,
+                        message: `域名 '${fullName}' 已存在相同类型的 ${record.type} 记录`
+                    };
+                }
+            }
+        }
+    }
+    
+    return { hasConflict: false };
+}
+
+// 显示冲突警告
+function showConflictWarning(elementId, conflictResult) {
+    const warningElement = document.getElementById(elementId);
+    if (!warningElement) return;
+    
+    if (conflictResult.hasConflict) {
+        warningElement.innerHTML = `
+            <div class="alert alert-warning alert-sm mt-2">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>冲突警告：</strong>${conflictResult.message}<br>
+                <small>现有记录：${conflictResult.existingRecord.type} → ${conflictResult.existingRecord.content}</small>
+            </div>
+        `;
+        warningElement.style.display = 'block';
+    } else {
+        warningElement.style.display = 'none';
+    }
+}
+
+// 检查并更新冲突状态
+function checkAndUpdateConflict() {
+    const subdomainInput = document.getElementById('subdomain');
+    const typeSelect = document.getElementById('type');
+    const contentInput = document.getElementById('content');
+    const submitButton = document.querySelector('button[name="add_record"]');
+    
+    if (subdomainInput && typeSelect && contentInput && submitButton) {
+        const subdomain = subdomainInput.value;
+        const type = typeSelect.value;
+        const content = contentInput.value;
+        
+        if (subdomain && type && content) {
+            const conflictResult = checkDNSConflict(subdomain, type, content);
+            showConflictWarning('conflict-warning-add', conflictResult);
+            
+            // 如果有冲突，禁用提交按钮
+            if (conflictResult.hasConflict) {
+                submitButton.disabled = true;
+                submitButton.title = '存在DNS记录冲突，无法提交';
+                submitButton.classList.add('btn-secondary');
+                submitButton.classList.remove('btn-primary');
+            } else {
+                submitButton.disabled = false;
+                submitButton.title = '';
+                submitButton.classList.add('btn-primary');
+                submitButton.classList.remove('btn-secondary');
+            }
+        } else {
+            // 清除警告
+            showConflictWarning('conflict-warning-add', { hasConflict: false });
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.classList.add('btn-primary');
+                submitButton.classList.remove('btn-secondary');
+            }
+        }
+    }
 }
 </script>
 

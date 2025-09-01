@@ -69,19 +69,7 @@ include 'includes/header.php';
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                 <h1 class="h2"><i class="fas fa-user-friends me-2"></i>邀请管理</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
-                    <?php if ($my_invitation): ?>
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-primary" onclick="copyInvitationCode('<?php echo $my_invitation['invitation_code']; ?>')">
-                            <i class="fas fa-link me-2"></i>复制邀请链接
-                        </button>
-                        <button type="button" class="btn btn-outline-primary" onclick="shareInvitation('<?php echo $my_invitation['invitation_code']; ?>')">
-                            <i class="fas fa-share-alt me-2"></i>分享邀请
-                        </button>
-                        <button type="button" class="btn btn-outline-info" onclick="viewInvitationDetails('<?php echo $my_invitation['invitation_code']; ?>')">
-                            <i class="fas fa-eye me-2"></i>查看详情
-                        </button>
-                    </div>
-                    <?php endif; ?>
+
                 </div>
             </div>
             
@@ -429,11 +417,11 @@ function viewInvitationDetails(code) {
     modal.className = 'modal fade';
     modal.id = 'invitationDetailsModal';
     modal.innerHTML = `
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="fas fa-info-circle me-2"></i>邀请码详情
+                        <i class="fas fa-info-circle me-2"></i>邀请码详情 - ${code}
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
@@ -450,6 +438,9 @@ function viewInvitationDetails(code) {
                     <button type="button" class="btn btn-primary" onclick="copyInvitationCode('${code}')">
                         <i class="fas fa-copy me-2"></i>复制邀请链接
                     </button>
+                    <button type="button" class="btn btn-success" onclick="shareInvitation('${code}')">
+                        <i class="fas fa-share-alt me-2"></i>分享邀请
+                    </button>
                 </div>
             </div>
         </div>
@@ -459,96 +450,159 @@ function viewInvitationDetails(code) {
     const bsModal = new bootstrap.Modal(modal);
     bsModal.show();
     
-    // 模拟加载详情数据（实际项目中可以通过AJAX获取）
-    setTimeout(() => {
-        const modalBody = modal.querySelector('.modal-body');
-        const baseUrl = window.location.origin + window.location.pathname.replace('/user/invitations.php', '');
-        const inviteUrl = baseUrl + '/user/login.php?invite=' + code;
-        
-        modalBody.innerHTML = `
-            <div class="row">
-                <div class="col-md-6">
-                    <h6 class="text-primary mb-3">
-                        <i class="fas fa-ticket-alt me-2"></i>邀请码信息
-                    </h6>
-                    <div class="card bg-light">
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">邀请码</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" value="${code}" readonly>
-                                    <button class="btn btn-outline-secondary" onclick="copyInvitationCodeOnly('${code}')" title="复制邀请码">
-                                        <i class="fas fa-copy"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">邀请链接</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" value="${inviteUrl}" readonly>
-                                    <button class="btn btn-outline-primary" onclick="copyInvitationCode('${code}')" title="复制邀请链接">
-                                        <i class="fas fa-link"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="mb-0">
-                                <label class="form-label fw-bold">状态</label>
-                                <div>
-                                    <span class="badge bg-success">
-                                        <i class="fas fa-check-circle me-1"></i>永久有效
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <h6 class="text-success mb-3">
-                        <i class="fas fa-chart-bar me-2"></i>使用统计
-                    </h6>
-                    <div class="card bg-light">
-                        <div class="card-body">
-                            <div class="row text-center">
-                                <div class="col-6 mb-3">
-                                    <div class="border-end">
-                                        <h4 class="text-primary mb-1">
-                                            <i class="fas fa-chart-line"></i>
-                                        </h4>
-                                        <small class="text-muted">使用次数</small>
-                                        <div class="fw-bold">查看表格</div>
+    // 从API获取详情数据
+    fetch(`api/invitation_details.php?code=${code}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            const modalBody = modal.querySelector('.modal-body');
+            const invitation = data.invitation;
+            const stats = data.statistics;
+            const history = data.usage_history;
+            
+            modalBody.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary mb-3">
+                            <i class="fas fa-ticket-alt me-2"></i>邀请码信息
+                        </h6>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">邀请码</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" value="${code}" readonly>
+                                        <button class="btn btn-outline-secondary" onclick="copyInvitationCodeOnly('${code}')" title="复制邀请码">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
                                     </div>
                                 </div>
-                                <div class="col-6 mb-3">
-                                    <h4 class="text-success mb-1">
-                                        <i class="fas fa-coins"></i>
-                                    </h4>
-                                    <small class="text-muted">获得积分</small>
-                                    <div class="fw-bold">查看表格</div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">邀请链接</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" value="${invitation.invite_url}" readonly>
+                                        <button class="btn btn-outline-primary" onclick="copyInvitationCode('${code}')" title="复制邀请链接">
+                                            <i class="fas fa-link"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">状态</label>
+                                    <div>
+                                        ${invitation.is_active ? 
+                                            '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>永久有效</span>' : 
+                                            '<span class="badge bg-secondary"><i class="fas fa-times-circle me-1"></i>已禁用</span>'
+                                        }
+                                    </div>
+                                </div>
+                                <div class="mb-0">
+                                    <label class="form-label fw-bold">创建时间</label>
+                                    <div class="text-muted">${invitation.formatted_created_at}</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="mt-3">
-                        <h6 class="text-info mb-3">
-                            <i class="fas fa-share-alt me-2"></i>分享方式
+                    <div class="col-md-6">
+                        <h6 class="text-success mb-3">
+                            <i class="fas fa-chart-bar me-2"></i>使用统计
                         </h6>
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-outline-primary btn-sm" onclick="shareToWeChat('${code}')">
-                                <i class="fab fa-weixin me-2"></i>分享到微信
-                            </button>
-                            <button class="btn btn-outline-info btn-sm" onclick="shareToQQ('${code}')">
-                                <i class="fab fa-qq me-2"></i>分享到QQ
-                            </button>
-                            <button class="btn btn-outline-success btn-sm" onclick="shareInvitation('${code}')">
-                                <i class="fas fa-share me-2"></i>系统分享
-                            </button>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="row text-center mb-3">
+                                    <div class="col-4">
+                                        <h4 class="text-primary mb-1">${stats.total_uses}</h4>
+                                        <small class="text-muted">总使用次数</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <h4 class="text-info mb-1">${stats.unique_users}</h4>
+                                        <small class="text-muted">邀请用户数</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <h4 class="text-success mb-1">${stats.total_rewards}</h4>
+                                        <small class="text-muted">获得积分</small>
+                                    </div>
+                                </div>
+                                ${stats.last_used_at ? `
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-clock me-1"></i>最后使用：${stats.formatted_last_used}
+                                        </small>
+                                    </div>
+                                ` : ''}
+                                ${stats.first_used_at ? `
+                                    <div class="mb-0">
+                                        <small class="text-muted">
+                                            <i class="fas fa-history me-1"></i>首次使用：${stats.formatted_first_used}
+                                        </small>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6 class="text-info mb-3">
+                                <i class="fas fa-share-alt me-2"></i>分享方式
+                            </h6>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-primary btn-sm" onclick="shareToWeChat('${code}')">
+                                    <i class="fab fa-weixin me-2"></i>分享到微信
+                                </button>
+                                <button class="btn btn-outline-info btn-sm" onclick="shareToQQ('${code}')">
+                                    <i class="fab fa-qq me-2"></i>分享到QQ
+                                </button>
+                                <button class="btn btn-outline-success btn-sm" onclick="shareInvitation('${code}')">
+                                    <i class="fas fa-share me-2"></i>系统分享
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        `;
-    }, 1000);
+                
+                ${history.length > 0 ? `
+                    <hr class="my-4">
+                    <h6 class="text-warning mb-3">
+                        <i class="fas fa-history me-2"></i>使用记录
+                    </h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>用户</th>
+                                    <th>使用时间</th>
+                                    <th>奖励积分</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${history.slice(0, 15).map(record => `
+                                    <tr>
+                                        <td><i class="fas fa-user me-1"></i>${record.invitee_username}</td>
+                                        <td>${record.formatted_time}</td>
+                                        <td><span class="badge bg-success">+${record.reward_points}</span></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        ${history.length > 15 ? `
+                            <div class="text-center">
+                                <small class="text-muted">显示最近 15 条记录，共 ${history.length} 条</small>
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : '<div class="alert alert-info mt-4"><i class="fas fa-info-circle me-2"></i>暂无使用记录，快去分享您的邀请码吧！</div>'}
+            `;
+        })
+        .catch(error => {
+            const modalBody = modal.querySelector('.modal-body');
+            modalBody.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    加载失败：${error.message}
+                </div>
+            `;
+        });
     
     // 模态框关闭时移除
     modal.addEventListener('hidden.bs.modal', function() {
