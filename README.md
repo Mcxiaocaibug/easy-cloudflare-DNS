@@ -5,6 +5,9 @@
 ##  演示地址
 https://dns.6qu.cc/
 
+##交流群
+点击链接加入群聊【六趣M】：https://qm.qq.com/q/qYN7MywxO0
+
 ##  伪静态
 #请注意伪静态必须添加，
 ```bash
