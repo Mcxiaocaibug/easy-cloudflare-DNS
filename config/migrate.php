@@ -93,17 +93,6 @@ function migrateDatabase() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )");
         
-        // 插入默认管理员账户（如果不存在）
-        $admin_exists = $db->querySingle("SELECT COUNT(*) FROM admins WHERE username = 'admin'");
-        if (!$admin_exists) {
-            $password = password_hash('admin123456', PASSWORD_DEFAULT);
-            $stmt = $db->prepare("INSERT INTO admins (username, password, email) VALUES (?, ?, ?)");
-            $stmt->bindValue(1, 'admin', SQLITE3_TEXT);
-            $stmt->bindValue(2, $password, SQLITE3_TEXT);
-            $stmt->bindValue(3, 'admin@example.com', SQLITE3_TEXT);
-            $stmt->execute();
-            echo "✓ 创建默认管理员账户\n";
-        }
         
         // 创建系统设置表
         $db->exec("CREATE TABLE IF NOT EXISTS settings (
