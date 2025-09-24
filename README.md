@@ -1,6 +1,11 @@
-# 🌐 Cloudflare DNS管理系统
+# 六趣DNS - Cloudflare DNS管理系统
 
-一个基于PHP开发的专业DNS记录管理平台，支持Cloudflare API集成、用户积分系统、批量同步等功能。
+<div align="center">
+  <img src="https://img.shields.io/badge/PHP-7.4+-blue.svg" alt="PHP Version">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/Database-SQLite3-orange.svg" alt="Database">
+  <img src="https://img.shields.io/badge/Framework-Bootstrap%205-purple.svg" alt="Frontend">
+</div>
 
 ##  演示地址
 https://dns.6qu.cc/
@@ -15,172 +20,274 @@ location ~* \.(db|sqlite|sql|bak|backup|log)$ {
   return 301 /;                
 }
 ```
-## ✨ 主要特性
 
-### 🎯 **核心功能**
-- **智能DNS管理** - 支持A、AAAA、CNAME、TXT等多种记录类型
-- **前缀查询系统** - 实时检查子域名前缀可用性
-- **多域名支持** - 统一管理多个Cloudflare域名
-- **用户积分系统** - 基于积分的DNS记录创建机制
-- **批量同步** - 从Cloudflare批量导入现有DNS记录
+## 📖 项目简介
 
-### 🎨 **用户体验**
-- **科技风格界面** - 现代化深色主题设计
-- **响应式布局** - 完美适配桌面端和移动端
-- **一键添加解析** - 从主页直接跳转到添加页面
-- **实时状态反馈** - 动态显示操作结果和系统状态
+六趣DNS是一个基于PHP开发的现代化Cloudflare DNS管理系统，为用户提供简洁、高效的DNS记录管理体验。系统支持多DNS提供商（Cloudflare、彩虹DNS），具备完善的用户管理、积分系统和邮件验证功能。
 
-### 🛡️ **安全特性**
-- **用户权限管理** - 完善的用户和管理员权限体系
-- **操作日志记录** - 详细记录所有系统操作
-- **前缀黑名单** - 防止恶意或不当的子域名注册
-- **登录保护** - 验证码和登录尝试限制
+### ✨ 核心特性
 
-### ⚙️ **管理功能**
-- **用户管理** - 用户注册、积分管理、状态控制
-- **域名管理** - Cloudflare账户配置、域名状态管理
-- **卡密系统** - 积分充值卡密生成和管理
-- **系统设置** - 灵活的系统参数配置
-- **批量同步** - 管理员专用的DNS记录批量导入
+- 🌐 **多DNS提供商支持** - 同时支持Cloudflare和彩虹DNS
+- 👥 **用户权限管理** - 完整的用户注册、登录、权限控制
+- 💰 **积分系统** - 灵活的积分消耗和充值机制
+- 📧 **邮件验证** - 完整的邮箱验证码系统
+- 🎨 **现代化界面** - 响应式设计，深色科技风格
+- 🔒 **安全防护** - 多重验证，操作日志，安全防护
 
-## 🚀 快速开始
+## 🚀 功能特色
 
-### 📋 **系统要求**
-- PHP 7.4+ 或 8.0+
-- SQLite3 扩展
-- cURL 扩展
-- 支持 .htaccess 的Web服务器
+### 用户功能
+- ✅ **DNS记录管理** - 支持A、AAAA、CNAME、TXT、MX等记录类型
+- ✅ **实时前缀查询** - 检查子域名可用性
+- ✅ **批量DNS同步** - 从Cloudflare导入现有记录
+- ✅ **邮箱验证系统** - 注册、密码重置、邮箱更换验证
+- ✅ **积分充值** - 卡密充值系统
+- ✅ **邀请奖励** - 邀请新用户获得积分奖励
 
-### 📦 **安装步骤**
+### 管理功能
+- 🛠️ **用户管理** - 用户账户管理、积分调整
+- 🌐 **域名管理** - 多渠道域名添加和管理
+- 🔧 **系统设置** - SMTP配置、系统参数调整
+- 📧 **邮件模板** - 自定义邮件模板编辑
+- 📊 **操作日志** - 完整的操作审计记录
+- 🎫 **卡密管理** - 充值卡密生成和管理
+
+## 🛠️ 技术栈
+
+### 后端技术
+- **PHP 7.4+** - 服务端开发语言
+- **SQLite3** - 轻量级数据库
+- **PHPMailer** - 邮件发送组件
+
+### 前端技术
+- **Bootstrap 5** - 响应式UI框架
+- **jQuery** - JavaScript库
+- **FontAwesome** - 图标字体
+
+### 系统架构
+- **MVC模式** - 清晰的代码结构
+- **模块化设计** - 功能模块独立
+- **API封装** - 统一的DNS服务接口
+
+## 📦 安装部署
+
+### 环境要求
+
+```bash
+PHP >= 7.4
+SQLite3 扩展
+cURL 扩展
+OpenSSL 扩展
+Web服务器 (Apache/Nginx)
+```
+
+### 快速安装
 
 1. **克隆项目**
 ```bash
 git clone https://github.com/976853694/cloudflare-DNS.git
-cd cloudflare-dns-manager
+cd cloudflare-DNS
 ```
 
-2. **设置权限**
+2. **配置Web服务器**
 ```bash
+# 将项目目录设置为Web根目录
+# 确保data目录有写入权限
 chmod 755 data/
 chmod 666 data/cloudflare_dns.db
 ```
 
-3. **配置Web服务器**
-- 将项目目录设置为网站根目录
-- 确保支持 .htaccess 重写规则
-
-4. **访问安装页面**
+3. **访问安装页面**
 ```
-http://yourdomain.com/install.php
+http://your-domain.com/install.php
 ```
 
-5. **完成安装向导**
-- 设置管理员账户
-- 配置系统参数
-- 添加Cloudflare域名
+4. **完成安装**
+- 按照安装向导完成数据库初始化
+- 创建管理员账户
+- 配置基本系统参数
 
-### ⚙️ **配置说明**
 
-#### **Cloudflare API配置**
-1. 登录 Cloudflare 控制台
-2. 获取 Global API Key 或创建 API Token
-3. 在系统中添加域名配置：
-   - 域名名称
-   - Zone ID
-   - API Key/Token
-   - 邮箱地址
+## 🔧 配置说明
 
-#### **系统设置**
-- **站点名称** - 自定义系统名称
-- **用户注册** - 开启/关闭用户注册
-- **默认积分** - 新用户初始积分
-- **记录消耗** - 创建DNS记录所需积分
+### SMTP邮件配置
 
-## 📖 使用指南
+访问管理后台的"SMTP设置"页面配置邮件服务：
 
-### 👤 **用户功能**
-
-#### **前缀查询**
-1. 在主页输入想要的子域名前缀
-2. 系统显示在所有域名下的可用性
-3. 点击"添加"按钮直接创建DNS记录
-
-#### **DNS记录管理**
-1. 登录用户控制台
-2. 选择目标域名
-3. 添加/编辑/删除DNS记录
-4. 实时同步到Cloudflare
-
-#### **积分充值**
-1. 获取充值卡密
-2. 在用户中心输入卡密
-3. 积分自动充值到账户
-
-### 👨‍💼 **管理员功能**
-
-#### **用户管理**
-- 查看所有用户信息
-- 调整用户积分余额
-- 启用/禁用用户账户
-- 查看用户操作历史
-
-#### **域名管理**
-- 添加/编辑Cloudflare域名配置
-- 测试API连接状态
-- 管理域名启用状态
-- 单域名DNS记录同步
-
-#### **批量同步**
-- 选择多个域名进行批量同步
-- 从Cloudflare导入现有DNS记录
-- 系统记录与用户记录分离管理
-- 详细的同步结果报告
-
-#### **系统维护**
-- 生成和管理充值卡密
-- 配置系统参数
-- 查看操作日志
-- 管理公告和前缀黑名单
-
-## 🏗️ 技术架构
-
-### **后端技术**
-- **PHP** - 核心开发语言
-- **SQLite3** - 轻量级数据库
-- **Cloudflare API** - DNS记录管理
-
-### **前端技术**
-- **Bootstrap 5** - 响应式UI框架
-- **FontAwesome** - 图标库
-- **jQuery** - JavaScript库
-- **自定义CSS** - 科技风格主题
-
-### **数据库设计**
-- **用户系统** - users, admins, invitations
-- **DNS管理** - domains, dns_records, dns_record_types
-- **积分系统** - card_keys, card_key_usage
-- **系统功能** - settings, action_logs, announcements
-
-## 🔧 开发指南
-
-### **项目结构**
-```
-├── admin/              # 管理员后台
-├── user/               # 用户前台
-├── config/             # 配置文件
-├── includes/           # 公共函数库
-├── assets/             # 静态资源
-├── data/               # 数据库文件
-├── index.php           # 主页
-├── install.php         # 安装程序
-└── upgrade.php         # 升级程序
+```php
+// 支持的SMTP服务商
+QQ邮箱: smtp.qq.com:465 (SSL)
+Gmail: smtp.gmail.com:465 (SSL)  
+163邮箱: smtp.163.com:465 (SSL)
 ```
 
-### **核心类库**
-- **Database** - 数据库连接和操作
-- **CloudflareAPI** - Cloudflare API封装
-- **Security** - 安全验证和保护
-- **Functions** - 通用工具函数
+### DNS提供商配置
+
+#### Cloudflare配置
+1. 获取Cloudflare  Token
+2. 在后台"管理CF账户"中添加账户
+3. 从账户中导入域名
+
+#### 彩虹DNS配置
+1. 获取彩虹DNS API密钥
+2. 在后台"管理彩虹账户"中添加账户
+3. 从账户中导入域名
+
+## 📊 系统架构
+
+```
+cloudflare-DNS/
+├── admin/                 # 管理后台
+│   ├── includes/         # 后台公共组件
+│   ├── *.php            # 管理功能页面
+├── user/                 # 用户前台
+│   ├── includes/        # 前台公共组件
+│   ├── *.php           # 用户功能页面
+├── config/              # 配置文件
+│   ├── database.php    # 数据库配置
+│   ├── smtp.php        # 邮件服务
+│   └── *.php          # 其他配置
+├── includes/           # 公共功能
+│   ├── functions.php   # 通用函数
+│   └── captcha.php    # 验证码类
+├── assets/            # 静态资源
+│   ├── css/          # 样式文件
+│   ├── js/           # JavaScript文件
+│   └── images/       # 图片资源
+└── data/             # 数据目录
+    └── cloudflare_dns.db  # SQLite数据库
+```
+
+## 🔐 安全特性
+
+### 多重验证
+- 📧 **邮箱验证** - 注册、密码重置、邮箱更换
+- 🖼️ **图形验证码** - 防止自动化攻击
+- 🔑 **密码强度** - 强制密码复杂度要求
+
+### 操作审计
+- 📝 **操作日志** - 记录所有关键操作
+- 🔍 **IP追踪** - 记录操作来源IP
+- ⏰ **时间戳** - 精确的操作时间记录
+
+### 数据保护
+- 🔐 **密码加密** - 使用PHP内置密码哈希
+- 🛡️ **SQL注入防护** - 预处理语句防护
+- 🚫 **XSS防护** - 输出内容转义处理
+
+## 🎨 界面预览
+
+### 用户前台
+- 🌙 **深色主题** - 现代科技风格界面
+- 📱 **响应式设计** - 完美适配移动设备
+- ⚡ **快速操作** - 一键DNS记录管理
+
+### 管理后台
+- 📊 **数据仪表板** - 直观的数据展示
+- 🛠️ **功能管理** - 完整的系统管理功能
+- 📈 **统计分析** - 详细的使用统计
+
+## 🤝 贡献指南
+
+我们欢迎所有形式的贡献，包括但不限于：
+
+- 🐛 **Bug报告** - 发现问题请提交Issue
+- ✨ **功能建议** - 新功能想法和改进建议
+- 📝 **文档改进** - 完善项目文档
+- 💻 **代码贡献** - 提交Pull Request
+
+### 开发环境搭建
+
+```bash
+# 1. Fork 项目到您的GitHub账户
+# 2. 克隆您的Fork
+git clone https://github.com/YOUR_USERNAME/cloudflare-DNS.git
+
+# 3. 创建功能分支
+git checkout -b feature/your-feature-name
+
+# 4. 开发和测试
+# 5. 提交Pull Request
+```
+
+## 📞 支持与反馈
+
+### 获取帮助
+- 📖 **文档**: 查看项目Wiki和文档
+- 💬 **社区**: 加入QQ群与其他用户交流
+- 🐛 **问题报告**: 在GitHub Issues提交问题
+
+### 联系方式
+- **GitHub仓库**: [https://github.com/976853694/cloudflare-DNS](https://github.com/976853694/cloudflare-DNS)
+- **QQ反馈群**: [点击加入群聊【六趣M】](https://qm.qq.com/q/k6ReSZLpu0)
 
 ## Stargazers over time
 [![Stargazers over time](https://starchart.cc/976853694/cloudflare-DNS.svg?variant=adaptive)](https://starchart.cc/976853694/cloudflare-DNS)
+
+
+### 常见问题
+
+<details>
+<summary>如何配置SMTP邮件发送？</summary>
+
+1. 登录管理后台
+2. 进入"SMTP设置"页面
+3. 填写邮箱服务器信息
+4. 发送测试邮件验证配置
+</details>
+
+<details>
+<summary>如何添加Cloudflare域名？</summary>
+
+1. 在Cloudflare获取API Token
+2. 后台"管理CF账户"添加账户
+3. 使用"获取域名"功能导入域名
+4. 在用户前台选择域名使用
+</details>
+
+<details>
+<summary>如何自定义邮件模板？</summary>
+
+1. 进入后台"SMTP设置"
+2. 点击"邮件模板"按钮
+3. 选择要编辑的模板类型
+4. 修改HTML模板内容
+5. 保存模板即可生效
+</details>
+
+## 📄 开源协议
+
+本项目采用 [MIT License](LICENSE) 开源协议。
+
+```
+MIT License
+
+Copyright (c) 2024 六趣DNS
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+```
+
+## 🙏 致谢
+
+感谢以下开源项目和服务：
+
+- [Bootstrap](https://getbootstrap.com/) - 响应式UI框架
+- [PHPMailer](https://github.com/PHPMailer/PHPMailer) - PHP邮件发送库
+- [FontAwesome](https://fontawesome.com/) - 图标字体库
+- [jQuery](https://jquery.com/) - JavaScript库
+
+---
+
+
+<div align="center">
+  <p>⭐ 如果这个项目对您有帮助，请给我们一个Star支持！</p>
+  <p>Made with ❤️ by 六趣M</p>
+</div>

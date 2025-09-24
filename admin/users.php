@@ -122,7 +122,7 @@ if ($action === 'delete' && getGet('id')) {
         } else {
             // 删除用户相关数据
             $db->exec("DELETE FROM card_key_usage WHERE user_id = $id");
-            $db->exec("DELETE FROM login_attempts WHERE ip IN (SELECT DISTINCT ip FROM action_logs WHERE user_type = 'user' AND user_id = $id)");
+            $db->exec("DELETE FROM login_attempts WHERE ip_address IN (SELECT DISTINCT ip_address FROM action_logs WHERE user_type = 'user' AND user_id = $id)");
             $db->exec("DELETE FROM users WHERE id = $id");
             
             logAction('admin', $_SESSION['admin_id'], 'delete_user', "删除用户: {$user['username']}");

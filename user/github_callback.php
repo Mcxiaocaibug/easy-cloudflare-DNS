@@ -9,11 +9,9 @@ if (!file_exists('../data/install.lock')) {
 
 require_once '../config/database.php';
 require_once '../config/github_oauth.php';
-require_once '../config/migrate_oauth.php';
 require_once '../includes/functions.php';
 
-// 执行OAuth数据库迁移（如果需要）
-migrateOAuthSupport();
+// OAuth功能已集成到数据库升级系统中
 
 $error = '';
 

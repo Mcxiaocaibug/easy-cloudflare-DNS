@@ -153,7 +153,7 @@ if (!in_array($client_ip, $allowed_ips) && !isset($_GET['force'])) {
         <div class="info-box">
             <h4>添加新功能的数据库变更步骤：</h4>
             <ol>
-                <li>在 <code>config/database_upgrade.php</code> 中增加版本号</li>
+                <li>在 <code>config/database.php</code> 的 DatabaseUpgrade 类中增加版本号</li>
                 <li>在 <code>$database_versions</code> 数组中添加新版本和对应的方法</li>
                 <li>创建对应的升级方法，例如：
                     <pre>private function addNewFeature() {
@@ -179,7 +179,7 @@ if (!in_array($client_ip, $allowed_ips) && !isset($_GET['force'])) {
             echo "<hr><h3>📊 执行结果</h3>";
             
             if ($_GET['action'] === 'upgrade') {
-                require_once 'config/database_upgrade.php';
+                require_once 'config/database.php';
             } elseif ($_GET['action'] === 'check') {
                 echo "<div style='font-family: monospace; background: #f5f5f5; padding: 20px;'>";
                 echo "<p>执行数据库状态检查...</p>";

@@ -2,69 +2,107 @@
 session_start();
 require_once '../config/database.php';
 require_once '../config/github_oauth.php';
+require_once '../config/smtp.php';
 require_once '../includes/functions.php';
+require_once '../includes/captcha.php';
 
 checkUserLogin();
 
 $db = Database::getInstance()->getConnection();
 $messages = getMessages();
 
-// 处理密码修改
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
+// 处理发送密码修改验证码
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_password_code'])) {
     $current_password = getPost('current_password');
+    $captcha_code = getPost('captcha_code');
+    
+    $captcha = new Captcha();
+    
+    if (!$current_password || !$captcha_code) {
+        showError('请填写完整信息');
+    } elseif (!$captcha->verify($captcha_code)) {
+        showError('验证码错误或已过期');
+    } else {
+        // 验证当前密码
+        $user = $db->querySingle("SELECT * FROM users WHERE id = {$_SESSION['user_id']}", true);
+        if (!password_verify($current_password, $user['password'])) {
+            showError('当前密码错误');
+        } elseif (empty($user['email'])) {
+            showError('您的账户未绑定邮箱，无法发送验证码');
+        } else {
+            // 发送密码修改验证码
+            try {
+                $emailService = new EmailService();
+                $emailService->sendPasswordReset($user['email'], $user['username'], $user['id']);
+                $_SESSION['password_change_step'] = 'verify';
+                showSuccess('验证码已发送到您的邮箱，请查收');
+            } catch (Exception $e) {
+                showError('验证码发送失败：' . $e->getMessage());
+                error_log("Password change verification failed for user {$user['id']}: " . $e->getMessage());
+            }
+        }
+    }
+    redirect('profile.php');
+}
+
+// 处理密码修改（需要验证码）
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
+    $verification_code = getPost('verification_code');
     $new_password = getPost('new_password');
     $confirm_password = getPost('confirm_password');
     
-    if (!$current_password || !$new_password || !$confirm_password) {
+    if (!$verification_code || !$new_password || !$confirm_password) {
         showError('请填写完整信息');
     } elseif (strlen($new_password) < 6) {
         showError('新密码至少需要6个字符');
     } elseif ($new_password !== $confirm_password) {
         showError('两次输入的新密码不一致');
     } else {
-        // 验证当前密码
-        $user = $db->querySingle("SELECT password FROM users WHERE id = {$_SESSION['user_id']}", true);
-        if (password_verify($current_password, $user['password'])) {
-            $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-            $stmt = $db->prepare("UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
-            $stmt->bindValue(1, $hashed_password, SQLITE3_TEXT);
-            $stmt->bindValue(2, $_SESSION['user_id'], SQLITE3_INTEGER);
+        // 获取用户信息
+        $user = $db->querySingle("SELECT * FROM users WHERE id = {$_SESSION['user_id']}", true);
+        
+        // 验证邮箱验证码
+        try {
+            $emailService = new EmailService();
+            $verification = $emailService->verifyCode($user['email'], $verification_code, 'password_reset');
             
-            if ($stmt->execute()) {
-                logAction('user', $_SESSION['user_id'], 'change_password', '用户修改密码');
-                showSuccess('密码修改成功！');
+            if ($verification['valid'] && $verification['user_id'] == $_SESSION['user_id']) {
+                // 更新密码
+                $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+                $stmt = $db->prepare("UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+                $stmt->bindValue(1, $hashed_password, SQLITE3_TEXT);
+                $stmt->bindValue(2, $_SESSION['user_id'], SQLITE3_INTEGER);
+                
+                if ($stmt->execute()) {
+                    logAction('user', $_SESSION['user_id'], 'change_password', '用户修改密码');
+                    
+                    // 发送密码修改通知邮件
+                    try {
+                        $emailService->sendPasswordChangeNotification($user['email'], $user['username']);
+                        showSuccess('密码修改成功！已发送通知邮件到您的邮箱');
+                    } catch (Exception $e) {
+                        showSuccess('密码修改成功！但邮件通知发送失败');
+                        error_log("Password change email failed: " . $e->getMessage());
+                    }
+                    
+                    // 清除验证步骤
+                    unset($_SESSION['password_change_step']);
+                } else {
+                    showError('密码修改失败');
+                }
             } else {
-                showError('密码修改失败！');
+                showError('验证码错误或已过期');
             }
-        } else {
-            showError('当前密码错误！');
+        } catch (Exception $e) {
+            showError('验证失败：' . $e->getMessage());
         }
     }
     redirect('profile.php');
 }
 
-// 处理邮箱修改
+// 邮箱修改重定向到专用页面
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_email'])) {
-    $email = getPost('email');
-    
-    if (!$email) {
-        showError('请输入邮箱地址');
-    } elseif (!isValidEmail($email)) {
-        showError('请输入有效的邮箱地址');
-    } else {
-        $stmt = $db->prepare("UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
-        $stmt->bindValue(1, $email, SQLITE3_TEXT);
-        $stmt->bindValue(2, $_SESSION['user_id'], SQLITE3_INTEGER);
-        
-        if ($stmt->execute()) {
-            $_SESSION['user_email'] = $email;
-            logAction('user', $_SESSION['user_id'], 'update_email', '用户更新邮箱');
-            showSuccess('邮箱更新成功！');
-        } else {
-            showError('邮箱更新失败！');
-        }
-    }
-    redirect('profile.php');
+    redirect('change_email.php');
 }
 
 // 处理GitHub解绑
@@ -160,9 +198,9 @@ include 'includes/header.php';
                                     <label class="form-label">注册时间</label>
                                     <input type="text" class="form-control" value="<?php echo formatTime($user['created_at']); ?>" readonly>
                                 </div>
-                                <button type="submit" name="update_email" class="btn btn-primary">
-                                    <i class="fas fa-save me-1"></i>更新邮箱
-                                </button>
+                                <a href="change_email.php" class="btn btn-primary">
+                                    <i class="fas fa-edit me-1"></i>更换邮箱
+                                </a>
                             </form>
                         </div>
                     </div>
@@ -175,24 +213,64 @@ include 'includes/header.php';
                             <h6 class="m-0 font-weight-bold text-primary">修改密码</h6>
                         </div>
                         <div class="card-body">
-                            <form method="POST">
-                                <div class="mb-3">
-                                    <label for="current_password" class="form-label">当前密码</label>
-                                    <input type="password" class="form-control" id="current_password" name="current_password" required>
+                            <?php if (!isset($_SESSION['password_change_step']) || $_SESSION['password_change_step'] !== 'verify'): ?>
+                                <!-- 步骤1: 验证身份并发送验证码 -->
+                                <form method="POST">
+                                    <div class="mb-3">
+                                        <label for="current_password" class="form-label">当前密码</label>
+                                        <input type="password" class="form-control" id="current_password" name="current_password" required>
+                                        <div class="form-text">请输入当前密码以验证身份</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="captcha_code" class="form-label">图形验证码</label>
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <input type="text" class="form-control" id="captcha_code" name="captcha_code" required placeholder="请输入验证码">
+                                            </div>
+                                            <div class="col-6">
+                                                <img src="../captcha_image.php" alt="验证码" class="img-fluid border rounded" 
+                                                     id="captcha_img" style="height: 38px; cursor: pointer;" 
+                                                     onclick="refreshCaptcha()" title="点击刷新验证码">
+                                            </div>
+                                        </div>
+                                        <small class="form-text text-muted">点击图片可刷新验证码</small>
+                                    </div>
+                                    <button type="submit" name="send_password_code" class="btn btn-primary">
+                                        <i class="fas fa-paper-plane me-1"></i>发送邮箱验证码
+                                    </button>
+                                </form>
+                            <?php else: ?>
+                                <!-- 步骤2: 输入验证码并修改密码 -->
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    验证码已发送到您的邮箱，请查收并输入验证码
                                 </div>
-                                <div class="mb-3">
-                                    <label for="new_password" class="form-label">新密码</label>
-                                    <input type="password" class="form-control" id="new_password" name="new_password" required>
-                                    <div class="form-text">密码至少6个字符</div>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="confirm_password" class="form-label">确认新密码</label>
-                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
-                                </div>
-                                <button type="submit" name="change_password" class="btn btn-warning">
-                                    <i class="fas fa-key me-1"></i>修改密码
-                                </button>
-                            </form>
+                                <form method="POST">
+                                    <div class="mb-3">
+                                        <label for="verification_code" class="form-label">邮箱验证码</label>
+                                        <input type="text" class="form-control" id="verification_code" name="verification_code" 
+                                               placeholder="请输入6位验证码" maxlength="6" required>
+                                        <div class="form-text">验证码5分钟内有效</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="new_password" class="form-label">新密码</label>
+                                        <input type="password" class="form-control" id="new_password" name="new_password" required>
+                                        <div class="form-text">密码长度至少6个字符</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="confirm_password" class="form-label">确认新密码</label>
+                                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                    </div>
+                                    <div class="d-grid gap-2">
+                                        <button type="submit" name="change_password" class="btn btn-success">
+                                            <i class="fas fa-check me-1"></i>确认修改密码
+                                        </button>
+                                        <a href="profile.php" class="btn btn-outline-secondary">
+                                            <i class="fas fa-arrow-left me-1"></i>重新发送验证码
+                                        </a>
+                                    </div>
+                                </form>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -316,5 +394,21 @@ include 'includes/header.php';
         </main>
     </div>
 </div>
+
+<script>
+// 刷新验证码
+function refreshCaptcha() {
+    const captchaImg = document.getElementById('captcha_img');
+    if (captchaImg) {
+        captchaImg.src = '../captcha_image.php?' + Math.random();
+    }
+}
+
+// 清除密码修改步骤（当用户点击重新发送验证码时）
+<?php if (isset($_GET['reset']) && $_GET['reset'] === 'password'): ?>
+    <?php unset($_SESSION['password_change_step']); ?>
+    window.location.href = 'profile.php';
+<?php endif; ?>
+</script>
 
 <?php include 'includes/footer.php'; ?>

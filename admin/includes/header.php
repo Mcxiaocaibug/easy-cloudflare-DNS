@@ -63,6 +63,61 @@
         .text-gray-300 {
             color: #dddfeb !important;
         }
+        
+        /* 修复侧边栏在缩放状态下的显示问题 */
+        .sidebar-container {
+            height: calc(100vh - 48px);
+            max-height: calc(100vh - 48px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-bottom: 20px;
+        }
+        
+        /* 优化滚动条样式 */
+        .sidebar-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .sidebar-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        .sidebar-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        
+        .sidebar-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        /* 确保退出按钮始终在底部可见 */
+        .sidebar-container .mt-auto {
+            margin-top: auto !important;
+            flex-shrink: 0;
+        }
+        
+        /* 响应式改进 - 在小屏幕和缩放状态下优化显示 */
+        @media (max-width: 991px) {
+            .sidebar-container {
+                height: auto;
+                max-height: none;
+            }
+        }
+        
+        /* 针对高DPI和缩放显示的优化 */
+        @media (-webkit-device-pixel-ratio: 1.5), (min-resolution: 144dpi) {
+            .nav-link {
+                padding: 0.75rem 1rem;
+                font-size: 0.95rem;
+                line-height: 1.4;
+            }
+            
+            .sidebar-heading {
+                font-size: 0.8rem;
+                padding: 0.5rem 1rem;
+            }
+        }
     </style>
 </head>
 <body>

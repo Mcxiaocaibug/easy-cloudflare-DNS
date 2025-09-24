@@ -1,5 +1,5 @@
 <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
-    <div class="position-sticky pt-3 d-flex flex-column" style="height: calc(100vh - 48px);">
+    <div class="position-sticky pt-3 d-flex flex-column sidebar-container">
         <ul class="nav flex-column">
             <!-- 核心功能区 -->
             <li class="nav-item">
@@ -8,7 +8,29 @@
                 </a>
             </li>
             
-            <!-- 域名与DNS管理区 -->
+            <!-- 渠道管理区 -->
+            <li class="nav-item mt-3">
+                <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                    <span>渠道管理</span>
+                </h6>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'channels.php' ? 'active' : ''; ?>" href="channels.php">
+                    <i class="fas fa-plug me-2"></i>API渠道
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'cloudflare_accounts.php' ? 'active' : ''; ?>" href="cloudflare_accounts.php">
+                    <i class="fab fa-cloudflare me-2"></i>Cloudflare账户
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'rainbow_accounts.php' ? 'active' : ''; ?>" href="rainbow_accounts.php">
+                    <i class="fas fa-rainbow me-2"></i>彩虹DNS账户
+                </a>
+            </li>
+            
+            <!-- 域名管理区 -->
             <li class="nav-item mt-3">
                 <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
                     <span>域名管理</span>
@@ -16,7 +38,7 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['domains.php', 'domain_dns.php']) ? 'active' : ''; ?>" href="domains.php">
-                    <i class="fas fa-globe me-2"></i>域名管理
+                    <i class="fas fa-globe me-2"></i>域名列表
                 </a>
             </li>
             <li class="nav-item">
@@ -80,6 +102,11 @@
             <li class="nav-item">
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'settings.php' ? 'active' : ''; ?>" href="settings.php">
                     <i class="fas fa-cog me-2"></i>系统设置
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'smtp_settings.php' ? 'active' : ''; ?>" href="smtp_settings.php">
+                    <i class="fas fa-envelope me-2"></i>SMTP设置
                 </a>
             </li>
             <li class="nav-item">

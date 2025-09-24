@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/database.php';
 require_once '../config/cloudflare.php';
+require_once '../config/dns_manager.php';
 require_once '../includes/functions.php';
 
 checkUserLogin();
@@ -75,11 +76,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
         showError("前缀 \"$subdomain\" 已被系统拦截，无法创建此子域名！");
     } else {
         try {
-            $cf = new CloudflareAPI($current_domain['api_key'], $current_domain['email']);
+            // 使用统一的DNS管理器
+            $dns_manager = new DNSManager($current_domain);
             $full_name = $subdomain === '@' ? $current_domain['domain_name'] : $subdomain . '.' . $current_domain['domain_name'];
             
             // 检查是否已存在冲突的DNS记录
-            $existing_records = $cf->getDNSRecords($current_domain['zone_id']);
+            $existing_records = $dns_manager->getDNSRecords($current_domain['zone_id']);
             $conflict_found = false;
             $existing_record = null;
             
@@ -122,7 +124,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             $non_proxiable_types = ['NS', 'MX', 'TXT', 'SRV', 'CAA'];
             $final_proxied = in_array(strtoupper($type), $non_proxiable_types) ? false : (bool)$proxied;
             
-            $result = $cf->addDNSRecord($current_domain['zone_id'], $type, $full_name, $content, $final_proxied);
+            // 对于彩虹DNS，代理功能不可用
+            if (isset($current_domain['provider_type']) && $current_domain['provider_type'] === 'rainbow') {
+                $final_proxied = false;
+            }
+            
+            // 对于彩虹DNS，需要使用子域名而不是完整域名
+            if (isset($current_domain['provider_type']) && $current_domain['provider_type'] === 'rainbow') {
+                $record_name = $subdomain; // 彩虹DNS使用子域名
+            } else {
+                $record_name = $full_name; // Cloudflare使用完整域名
+            }
+            
+            $result = $dns_manager->createDNSRecord($current_domain['zone_id'], $type, $record_name, $content, [
+                'proxied' => $final_proxied,
+                'remark' => $remark
+            ]);
             
             // 保存到数据库
             $stmt = $db->prepare("INSERT INTO dns_records (user_id, domain_id, subdomain, type, content, proxied, cloudflare_id, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
@@ -132,7 +149,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             $stmt->bindValue(4, $type, SQLITE3_TEXT);
             $stmt->bindValue(5, $content, SQLITE3_TEXT);
             $stmt->bindValue(6, $final_proxied ? 1 : 0, SQLITE3_INTEGER);
-            $stmt->bindValue(7, $result['id'], SQLITE3_TEXT);
+            // 对于彩虹DNS，使用RecordId；对于Cloudflare，使用id
+            $record_id = isset($result['RecordId']) ? $result['RecordId'] : $result['id'];
+            $stmt->bindValue(7, $record_id, SQLITE3_TEXT);
             $stmt->bindValue(8, $remark, SQLITE3_TEXT);
             
             if ($stmt->execute()) {
@@ -171,14 +190,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
         }
         
         try {
-            $cf = new CloudflareAPI($current_domain['api_key'], $current_domain['email']);
+            // 使用统一的DNS管理器
+            $dns_manager = new DNSManager($current_domain);
+            $full_name = $subdomain === '@' ? $current_domain['domain_name'] : $subdomain . '.' . $current_domain['domain_name'];
             
-            // 更新Cloudflare DNS记录
-            $cf->updateDNSRecord($current_domain['zone_id'], $record['cloudflare_id'], [
-                'type' => $type,
-                'name' => $subdomain . '.' . $current_domain['domain_name'],
-                'content' => $content,
-                'proxied' => (bool)$proxied
+            // 对于彩虹DNS，代理功能不可用
+            if (isset($current_domain['provider_type']) && $current_domain['provider_type'] === 'rainbow') {
+                $proxied = 0;
+            }
+            
+            // 对于彩虹DNS，需要使用子域名而不是完整域名
+            if (isset($current_domain['provider_type']) && $current_domain['provider_type'] === 'rainbow') {
+                $record_name = $subdomain; // 彩虹DNS使用子域名
+            } else {
+                $record_name = $full_name; // Cloudflare使用完整域名
+            }
+            
+            // 更新DNS记录
+            $dns_manager->updateDNSRecord($current_domain['zone_id'], $record['cloudflare_id'], $type, $record_name, $content, [
+                'proxied' => (bool)$proxied,
+                'remark' => $remark
             ]);
             
             // 更新本地数据库
@@ -209,8 +240,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_record'])) {
     $record = $db->querySingle("SELECT * FROM dns_records WHERE id = $record_id AND user_id = {$_SESSION['user_id']}", true);
     if ($record && $current_domain) {
         try {
-            $cf = new CloudflareAPI($current_domain['api_key'], $current_domain['email']);
-            $cf->deleteDNSRecord($current_domain['zone_id'], $record['cloudflare_id']);
+            // 使用统一的DNS管理器
+            $dns_manager = new DNSManager($current_domain);
+            $dns_manager->deleteDNSRecord($current_domain['zone_id'], $record['cloudflare_id']);
             
             $db->exec("DELETE FROM dns_records WHERE id = $record_id");
             
@@ -476,6 +508,7 @@ include 'includes/header.php';
                         <input type="text" class="form-control" id="remark" name="remark" placeholder="例如：网站主页、API接口、邮件服务器等" maxlength="100">
                         <div class="form-text">添加备注可以帮助您区分不同解析记录的用途</div>
                     </div>
+                    <?php if (!isset($current_domain['provider_type']) || $current_domain['provider_type'] !== 'rainbow'): ?>
                     <div class="mb-3" id="proxied-section">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="proxied" name="proxied" value="1" 
@@ -489,6 +522,12 @@ include 'includes/header.php';
                             仅A、AAAA、CNAME记录支持代理功能。NS、MX、TXT、SRV等记录类型会自动禁用代理。
                         </div>
                     </div>
+                    <?php else: ?>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        彩虹DNS不支持代理功能，所有记录将直接解析。
+                    </div>
+                    <?php endif; ?>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -548,6 +587,7 @@ include 'includes/header.php';
                         <input type="text" class="form-control" id="edit_remark" name="remark" placeholder="例如：网站主页、API接口、邮件服务器等" maxlength="100">
                         <div class="form-text">添加备注可以帮助您区分不同解析记录的用途</div>
                     </div>
+                    <?php if (!isset($current_domain['provider_type']) || $current_domain['provider_type'] !== 'rainbow'): ?>
                     <div class="mb-3" id="edit-proxied-section">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="edit_proxied" name="proxied" value="1">
@@ -556,6 +596,12 @@ include 'includes/header.php';
                             </label>
                         </div>
                     </div>
+                    <?php else: ?>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        彩虹DNS不支持代理功能，所有记录将直接解析。
+                    </div>
+                    <?php endif; ?>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -646,6 +692,7 @@ function updateContentPlaceholder() {
     const proxiedSection = document.getElementById('proxied-section');
     
     const type = typeSelect.value;
+    const isRainbowDNS = <?php echo (isset($current_domain['provider_type']) && $current_domain['provider_type'] === 'rainbow') ? 'true' : 'false'; ?>;
     
     // 定义记录类型的配置
     const typeConfigs = {
@@ -700,11 +747,16 @@ function updateContentPlaceholder() {
     if (config) {
         contentInput.placeholder = config.placeholder;
         contentHelp.textContent = config.help;
-        proxiedSection.style.display = config.showProxied ? 'block' : 'none';
+        // 对于彩虹DNS，隐藏代理选项
+        if (proxiedSection) {
+            proxiedSection.style.display = (config.showProxied && !isRainbowDNS) ? 'block' : 'none';
+        }
     } else {
         contentInput.placeholder = '';
         contentHelp.textContent = '请输入对应记录类型的值';
-        proxiedSection.style.display = 'none';
+        if (proxiedSection) {
+            proxiedSection.style.display = 'none';
+        }
     }
 }
 
@@ -715,6 +767,7 @@ function updateEditContentPlaceholder() {
     const proxiedSection = document.getElementById('edit-proxied-section');
     
     const type = typeSelect.value;
+    const isRainbowDNS = <?php echo (isset($current_domain['provider_type']) && $current_domain['provider_type'] === 'rainbow') ? 'true' : 'false'; ?>;
     
     // 定义记录类型的配置
     const typeConfigs = {
@@ -769,11 +822,16 @@ function updateEditContentPlaceholder() {
     if (config) {
         contentInput.placeholder = config.placeholder;
         contentHelp.textContent = config.help;
-        proxiedSection.style.display = config.showProxied ? 'block' : 'none';
+        // 对于彩虹DNS，隐藏代理选项
+        if (proxiedSection) {
+            proxiedSection.style.display = (config.showProxied && !isRainbowDNS) ? 'block' : 'none';
+        }
     } else {
         contentInput.placeholder = '';
         contentHelp.textContent = '请输入对应记录类型的值';
-        proxiedSection.style.display = 'none';
+        if (proxiedSection) {
+            proxiedSection.style.display = 'none';
+        }
     }
 }
 

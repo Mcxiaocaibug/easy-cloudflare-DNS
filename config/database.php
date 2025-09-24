@@ -29,6 +29,9 @@ class Database {
         $this->db->exec('PRAGMA foreign_keys = ON');
         
         $this->initTables();
+        
+        // 自动执行数据库升级（安装时）
+        autoUpgradeOnInstall();
     }
     
     public static function getInstance() {
@@ -73,6 +76,9 @@ class Database {
             zone_id TEXT NOT NULL,
             proxied_default BOOLEAN DEFAULT 1,
             status INTEGER DEFAULT 1,
+            provider_type TEXT DEFAULT 'cloudflare',
+            provider_uid TEXT DEFAULT '',
+            api_base_url TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )");
@@ -121,6 +127,9 @@ class Database {
                 // 字段可能已存在，忽略错误
             }
         }
+        
+        // 为domains表添加新字段（支持多DNS提供商）
+        $this->addDomainsProviderFields();
         
         // 创建系统设置表
         $this->db->exec("CREATE TABLE IF NOT EXISTS settings (
@@ -315,5 +324,476 @@ class Database {
                 $stmt->execute();
             }
         }
+    }
+    
+    /**
+     * 为domains表添加多DNS提供商支持字段
+     */
+    private function addDomainsProviderFields() {
+        try {
+            $columns = $this->db->query("PRAGMA table_info(domains)");
+            $existing_columns = [];
+            
+            if ($columns) {
+                while ($column = $columns->fetchArray(SQLITE3_ASSOC)) {
+                    $existing_columns[] = $column['name'];
+                }
+            }
+            
+            // 添加provider_type字段
+            if (!in_array('provider_type', $existing_columns)) {
+                $this->db->exec("ALTER TABLE domains ADD COLUMN provider_type TEXT DEFAULT 'cloudflare'");
+            }
+            
+            // 添加provider_uid字段
+            if (!in_array('provider_uid', $existing_columns)) {
+                $this->db->exec("ALTER TABLE domains ADD COLUMN provider_uid TEXT DEFAULT ''");
+            }
+            
+            // 添加api_base_url字段
+            if (!in_array('api_base_url', $existing_columns)) {
+                $this->db->exec("ALTER TABLE domains ADD COLUMN api_base_url TEXT DEFAULT ''");
+            }
+            
+        } catch (Exception $e) {
+            // 忽略错误，字段可能已存在
+        }
+    }
+}
+
+/**
+ * 数据库迁移函数 - 从 migrate.php 整合
+ */
+function migrateDatabase() {
+    $db = Database::getInstance()->getConnection();
+    
+    // 检查并添加缺失的字段
+    $migrations = [
+        // DNS记录表增强
+        "ALTER TABLE dns_records ADD COLUMN remark TEXT DEFAULT ''",
+        "ALTER TABLE dns_records ADD COLUMN ttl INTEGER DEFAULT 300", 
+        "ALTER TABLE dns_records ADD COLUMN priority INTEGER DEFAULT NULL",
+        
+        // 用户表OAuth支持
+        "ALTER TABLE users ADD COLUMN github_id TEXT",
+        "ALTER TABLE users ADD COLUMN github_username TEXT", 
+        "ALTER TABLE users ADD COLUMN avatar_url TEXT",
+        "ALTER TABLE users ADD COLUMN oauth_provider TEXT",
+        "ALTER TABLE users ADD COLUMN github_bonus_received INTEGER DEFAULT 0",
+        
+        // 邀请表升级
+        "ALTER TABLE invitations ADD COLUMN use_count INTEGER DEFAULT 0",
+        "ALTER TABLE invitations ADD COLUMN total_rewards INTEGER DEFAULT 0", 
+        "ALTER TABLE invitations ADD COLUMN is_active INTEGER DEFAULT 1",
+        "ALTER TABLE invitations ADD COLUMN last_used_at TIMESTAMP DEFAULT NULL",
+        
+        // 域名表提供商支持
+        "ALTER TABLE domains ADD COLUMN provider_type TEXT DEFAULT 'cloudflare'",
+        "ALTER TABLE domains ADD COLUMN provider_uid TEXT",
+        "ALTER TABLE domains ADD COLUMN api_base_url TEXT"
+    ];
+    
+    foreach ($migrations as $sql) {
+        try {
+            $db->exec($sql);
+        } catch (Exception $e) {
+            // 忽略已存在字段的错误
+            if (!strpos($e->getMessage(), 'duplicate column name')) {
+                error_log("Migration error: " . $e->getMessage());
+            }
+        }
+    }
+    
+    // 创建索引
+    $indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)",
+        "CREATE INDEX IF NOT EXISTS idx_users_oauth_provider ON users(oauth_provider)",
+        "CREATE INDEX IF NOT EXISTS idx_dns_records_domain_id ON dns_records(domain_id)",
+        "CREATE INDEX IF NOT EXISTS idx_domains_provider_type ON domains(provider_type)"
+    ];
+    
+    foreach ($indexes as $sql) {
+        try {
+            $db->exec($sql);
+        } catch (Exception $e) {
+            error_log("Index creation error: " . $e->getMessage());
+        }
+    }
+    
+    return true;
+}
+
+/**
+ * 数据库修复函数 - 从 repair_database.php 整合  
+ */
+function repairDatabase() {
+    try {
+        $db = Database::getInstance()->getConnection();
+        
+        // 检查必需的表
+        $requiredTables = [
+            'users', 'admins', 'domains', 'dns_records', 'settings',
+            'card_keys', 'card_key_usage', 'action_logs', 'dns_record_types',
+            'invitations', 'invitation_uses', 'announcements', 'user_announcement_views',
+            'blocked_prefixes', 'login_attempts', 'cloudflare_accounts', 'rainbow_accounts'
+        ];
+        
+        $existingTables = [];
+        $result = $db->query("SELECT name FROM sqlite_master WHERE type='table'");
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $existingTables[] = $row['name'];
+        }
+        
+        $missingTables = array_diff($requiredTables, $existingTables);
+        if (!empty($missingTables)) {
+            error_log("Missing tables: " . implode(', ', $missingTables));
+            return false;
+        }
+        
+        // 自动运行数据库升级
+        migrateDatabase();
+        
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("Database repair failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * 数据库升级类 - 从 database_upgrade.php 整合
+ */
+class DatabaseUpgrade {
+    private $db;
+    private $current_version = '1.6.0';
+    
+    // 数据库版本升级规则
+    private $database_versions = [
+        '1.0.0' => 'createBaseTables',
+        '1.1.0' => 'addUserOAuthFields', 
+        '1.2.0' => 'addInvitationSystem',
+        '1.3.0' => 'addAnnouncementSystem',
+        '1.4.0' => 'addSecurityTables',
+        '1.5.0' => 'addIndexes',
+        '1.6.0' => 'addMissingFields'
+    ];
+    
+    public function __construct($silent = false) {
+        try {
+            $this->db = Database::getInstance()->getConnection();
+            if (!$silent) {
+                echo "<h2>数据库升级工具</h2>";
+            }
+        } catch (Exception $e) {
+            if (!$silent) {
+                die("数据库连接失败: " . $e->getMessage());
+            }
+            throw $e;
+        }
+    }
+    
+    /**
+     * 执行数据库升级
+     */
+    public function upgrade($silent = false) {
+        if (!$silent) {
+            echo "<div style='font-family: monospace; background: #f5f5f5; padding: 20px;'>";
+        }
+        
+        // 创建版本表
+        $this->createVersionTable();
+        
+        // 获取当前数据库版本
+        $current_db_version = $this->getCurrentDatabaseVersion();
+        if (!$silent) {
+            echo "<p><strong>当前数据库版本:</strong> $current_db_version</p>";
+            echo "<p><strong>目标版本:</strong> {$this->current_version}</p>";
+        }
+        
+        // 执行升级
+        $upgraded = false;
+        foreach ($this->database_versions as $version => $method) {
+            if (version_compare($current_db_version, $version, '<')) {
+                if (!$silent) {
+                    echo "<h3>升级到版本 $version</h3>";
+                }
+                
+                try {
+                    $this->$method($silent);
+                    $this->updateDatabaseVersion($version);
+                    if (!$silent) {
+                        echo "<p style='color: green;'>✅ 版本 $version 升级成功</p>";
+                    }
+                    $upgraded = true;
+                } catch (Exception $e) {
+                    if (!$silent) {
+                        echo "<p style='color: red;'>❌ 版本 $version 升级失败: " . $e->getMessage() . "</p>";
+                    }
+                    throw $e;
+                }
+            }
+        }
+        
+        if (!$upgraded && !$silent) {
+            echo "<p style='color: blue;'>📋 数据库已是最新版本，无需升级</p>";
+        }
+        
+        if (!$silent) {
+            echo "</div>";
+        }
+        
+        return $upgraded;
+    }
+    
+    /**
+     * 创建版本表
+     */
+    private function createVersionTable() {
+        $this->db->exec("CREATE TABLE IF NOT EXISTS database_versions (
+            version TEXT PRIMARY KEY,
+            upgraded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+    }
+    
+    /**
+     * 获取当前数据库版本
+     */
+    private function getCurrentDatabaseVersion() {
+        try {
+            $result = $this->db->querySingle("SELECT MAX(version) FROM database_versions");
+            return $result ?: '0.0.0';
+        } catch (Exception $e) {
+            return '0.0.0';
+        }
+    }
+    
+    /**
+     * 更新数据库版本
+     */
+    private function updateDatabaseVersion($version) {
+        $stmt = $this->db->prepare("INSERT OR REPLACE INTO database_versions (version) VALUES (?)");
+        $stmt->bindValue(1, $version, SQLITE3_TEXT);
+        $stmt->execute();
+    }
+    
+    /**
+     * 创建基础表 - 版本 1.0.0
+     */
+    private function createBaseTables($silent = false) {
+        // 这些表通常在 Database::initTables() 中已创建
+        // 此方法主要用于确保基础表存在
+        if (!$silent) {
+            echo "<p style='color: green;'>✅ 基础表检查完成</p>";
+        }
+    }
+    
+    /**
+     * 添加OAuth字段 - 版本 1.1.0
+     */
+    private function addUserOAuthFields($silent = false) {
+        $this->addColumnIfNotExists('users', 'github_id', 'TEXT', $silent);
+        $this->addColumnIfNotExists('users', 'github_username', 'TEXT', $silent);
+        $this->addColumnIfNotExists('users', 'avatar_url', 'TEXT', $silent);
+        $this->addColumnIfNotExists('users', 'oauth_provider', 'TEXT', $silent);
+        $this->addColumnIfNotExists('users', 'github_bonus_received', 'INTEGER DEFAULT 0', $silent);
+    }
+    
+    /**
+     * 添加邀请系统 - 版本 1.2.0
+     */
+    private function addInvitationSystem($silent = false) {
+        $this->addColumnIfNotExists('invitations', 'use_count', 'INTEGER DEFAULT 0', $silent);
+        $this->addColumnIfNotExists('invitations', 'total_rewards', 'INTEGER DEFAULT 0', $silent);
+        $this->addColumnIfNotExists('invitations', 'is_active', 'INTEGER DEFAULT 1', $silent);
+        $this->addColumnIfNotExists('invitations', 'last_used_at', 'TIMESTAMP DEFAULT NULL', $silent);
+    }
+    
+    /**
+     * 添加公告系统 - 版本 1.3.0
+     */
+    private function addAnnouncementSystem($silent = false) {
+        $this->addColumnIfNotExists('announcements', 'is_active', 'INTEGER DEFAULT 1', $silent);
+        $this->addColumnIfNotExists('announcements', 'type', 'TEXT DEFAULT "info"', $silent);
+    }
+    
+    /**
+     * 添加安全表 - 版本 1.4.0
+     */
+    private function addSecurityTables($silent = false) {
+        $this->addColumnIfNotExists('blocked_prefixes', 'is_active', 'INTEGER DEFAULT 1', $silent);
+        $this->addColumnIfNotExists('login_attempts', 'success', 'INTEGER DEFAULT 0', $silent);
+    }
+    
+    /**
+     * 添加索引 - 版本 1.5.0
+     */
+    private function addIndexes($silent = false) {
+        $indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)",
+            "CREATE INDEX IF NOT EXISTS idx_users_oauth_provider ON users(oauth_provider)",
+            "CREATE INDEX IF NOT EXISTS idx_dns_records_domain_id ON dns_records(domain_id)",
+            "CREATE INDEX IF NOT EXISTS idx_domains_provider_type ON domains(provider_type)"
+        ];
+        
+        foreach ($indexes as $sql) {
+            try {
+                $this->db->exec($sql);
+            } catch (Exception $e) {
+                if (!$silent) {
+                    echo "<p style='color: red;'>❌ 创建索引失败: " . $e->getMessage() . "</p>";
+                }
+            }
+        }
+        
+        if (!$silent) {
+            echo "<p style='color: green;'>✅ 索引创建完成</p>";
+        }
+    }
+    
+    /**
+     * 添加缺失字段 - 版本 1.6.0
+     */
+    private function addMissingFields($silent = false) {
+        // DNS记录表增强
+        $this->addColumnIfNotExists('dns_records', 'remark', 'TEXT DEFAULT ""', $silent);
+        $this->addColumnIfNotExists('dns_records', 'ttl', 'INTEGER DEFAULT 300', $silent);
+        $this->addColumnIfNotExists('dns_records', 'priority', 'INTEGER DEFAULT NULL', $silent);
+        
+        // 用户表积分字段
+        $this->addColumnIfNotExists('users', 'credits', 'INTEGER DEFAULT 0', $silent);
+        
+        // 登录尝试表增强
+        $this->addColumnIfNotExists('login_attempts', 'ip', 'TEXT', $silent);
+        $this->addColumnIfNotExists('login_attempts', 'user_agent', 'TEXT', $silent);
+        
+        // 添加SMTP配置到settings表
+        $this->addSMTPSettings($silent);
+        
+        // 域名表多提供商支持
+        $this->addColumnIfNotExists('domains', 'provider_type', 'TEXT DEFAULT "cloudflare"', $silent);
+        $this->addColumnIfNotExists('domains', 'provider_uid', 'TEXT', $silent);
+        $this->addColumnIfNotExists('domains', 'api_base_url', 'TEXT', $silent);
+    }
+    
+    /**
+     * 安全地添加字段
+     */
+    private function addColumnIfNotExists($table, $column, $definition, $silent = false) {
+        $columns = [];
+        $result = $this->db->query("PRAGMA table_info($table)");
+        if ($result) {
+            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+                $columns[] = $row['name'];
+            }
+            
+            if (!in_array($column, $columns)) {
+                try {
+                    $this->db->exec("ALTER TABLE $table ADD COLUMN $column $definition");
+                    if (!$silent) {
+                        echo "<p style='color: green;'>✅ 添加字段 $table.$column</p>";
+                    }
+                } catch (Exception $e) {
+                    if (!$silent) {
+                        echo "<p style='color: red;'>❌ 添加字段 $table.$column 失败: " . $e->getMessage() . "</p>";
+                    }
+                    throw $e;
+                }
+            }
+        }
+    }
+    
+    /**
+     * 添加SMTP配置设置
+     */
+    private function addSMTPSettings($silent = false) {
+        $smtp_settings = [
+            'smtp_enabled' => '1',
+            'smtp_host' => 'smtp.qq.com',
+            'smtp_port' => '465',
+            'smtp_username' => '邮箱',
+            'smtp_password' => '授权码',
+            'smtp_secure' => 'ssl',
+            'smtp_from_name' => '六趣DNS',
+            'smtp_debug' => '0'
+        ];
+        
+        foreach ($smtp_settings as $key => $value) {
+            try {
+                // 检查设置是否已存在
+                $exists = $this->db->querySingle("SELECT COUNT(*) FROM settings WHERE setting_key = '$key'");
+                if (!$exists) {
+                    $stmt = $this->db->prepare("INSERT INTO settings (setting_key, setting_value, description) VALUES (?, ?, ?)");
+                    $stmt->bindValue(1, $key, SQLITE3_TEXT);
+                    $stmt->bindValue(2, $value, SQLITE3_TEXT);
+                    $stmt->bindValue(3, $this->getSMTPDescription($key), SQLITE3_TEXT);
+                    $stmt->execute();
+                    
+                    if (!$silent) {
+                        echo "<p style='color: green;'>✅ 添加SMTP设置: $key</p>";
+                    }
+                }
+            } catch (Exception $e) {
+                if (!$silent) {
+                    echo "<p style='color: red;'>❌ 添加SMTP设置失败: $key - " . $e->getMessage() . "</p>";
+                }
+            }
+        }
+    }
+    
+    /**
+     * 获取SMTP设置描述
+     */
+    private function getSMTPDescription($key) {
+        $descriptions = [
+            'smtp_enabled' => '是否启用SMTP邮件发送',
+            'smtp_host' => 'SMTP服务器地址',
+            'smtp_port' => 'SMTP服务器端口',
+            'smtp_username' => 'SMTP用户名（发件邮箱）',
+            'smtp_password' => 'SMTP密码或授权码',
+            'smtp_secure' => 'SMTP安全连接类型（ssl/tls）',
+            'smtp_from_name' => '发件人显示名称',
+            'smtp_debug' => 'SMTP调试模式（0-3）'
+        ];
+        
+        return $descriptions[$key] ?? '';
+    }
+}
+
+/**
+ * 执行自动数据库升级 - 用于安装时调用
+ */
+function autoUpgradeDatabase() {
+    try {
+        $upgrader = new DatabaseUpgrade(true); // 静默模式
+        return $upgrader->upgrade(true);
+    } catch (Exception $e) {
+        error_log("Auto database upgrade failed: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * 安装时自动执行数据库升级 - 全局函数
+ */
+function autoUpgradeOnInstall() {
+    try {
+        // 检查是否是首次安装（没有version表或version表为空）
+        $version_exists = false;
+        try {
+            $db = Database::getInstance()->getConnection();
+            $db->querySingle("SELECT COUNT(*) FROM database_versions");
+            $version_exists = true;
+        } catch (Exception $e) {
+            // 表不存在，是首次安装
+        }
+        
+        if (!$version_exists) {
+            // 首次安装，静默执行升级
+            autoUpgradeDatabase();
+        }
+    } catch (Exception $e) {
+        // 静默处理错误，不影响正常安装
+        error_log("Auto upgrade on install failed: " . $e->getMessage());
     }
 }

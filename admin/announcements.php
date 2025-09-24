@@ -70,11 +70,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_announcement']
     
     $announcement = $db->querySingle("SELECT title FROM announcements WHERE id = $id", true);
     if ($announcement) {
-        $db->exec("DELETE FROM announcements WHERE id = $id");
-        $db->exec("DELETE FROM user_announcement_views WHERE announcement_id = $id");
-        
-        logAction('admin', $_SESSION['admin_id'], 'delete_announcement', "删除公告: {$announcement['title']}");
-        showSuccess('公告删除成功！');
+        try {
+            // 开始事务
+            $db->exec("BEGIN TRANSACTION");
+            
+            // 先删除关联的用户查看记录，再删除公告
+            $db->exec("DELETE FROM user_announcement_views WHERE announcement_id = $id");
+            $db->exec("DELETE FROM announcements WHERE id = $id");
+            
+            // 提交事务
+            $db->exec("COMMIT");
+            
+            logAction('admin', $_SESSION['admin_id'], 'delete_announcement', "删除公告: {$announcement['title']}");
+            showSuccess('公告删除成功！');
+        } catch (Exception $e) {
+            // 回滚事务
+            $db->exec("ROLLBACK");
+            error_log("Delete announcement failed: " . $e->getMessage());
+            showError('公告删除失败：' . $e->getMessage());
+        }
     } else {
         showError('公告不存在！');
     }
