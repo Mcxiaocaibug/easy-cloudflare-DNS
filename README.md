@@ -7,20 +7,6 @@
   <img src="https://img.shields.io/badge/Framework-Bootstrap%205-purple.svg" alt="Frontend">
 </div>
 
-##  演示地址
-https://dns.6qu.cc/
-
-##交流群
-点击链接加入群聊【六趣M】：https://qm.qq.com/q/qYN7MywxO0
-
-##  伪静态
-#请注意伪静态必须添加，
-```bash
-location ~* \.(db|sqlite|sql|bak|backup|log)$ {                                                 
-  return 301 /;                
-}
-```
-
 ## 📖 项目简介
 
 六趣DNS是一个基于PHP开发的现代化Cloudflare DNS管理系统，为用户提供简洁、高效的DNS记录管理体验。系统支持多DNS提供商（Cloudflare、彩虹DNS），具备完善的用户管理、积分系统和邮件验证功能。

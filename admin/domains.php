@@ -370,8 +370,9 @@ include 'includes/header.php';
         <?php include 'includes/sidebar.php'; ?>
         
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+            <div class="main-content">
             <!-- 页面标题和操作按钮 -->
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3" style="border-bottom: 1px solid rgba(255, 255, 255, 0.2);">
                 <h1 class="h2">域名管理</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
                     <div class="btn-group me-2">
@@ -553,6 +554,7 @@ include 'includes/header.php';
                 </div>
             </div>
             <?php endif; ?>
+            </div>
         </main>
     </div>
 </div>

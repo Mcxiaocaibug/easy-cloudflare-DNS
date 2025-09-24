@@ -287,7 +287,8 @@ include 'includes/header.php';
         <?php include 'includes/sidebar.php'; ?>
         
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <div class="main-content">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3" style="border-bottom: 1px solid rgba(255, 255, 255, 0.2);">
                 <div>
                     <h1 class="h2">DNS管理面板</h1>
                     <?php if ($auto_fill_mode): ?>
@@ -440,6 +441,7 @@ include 'includes/header.php';
                 系统暂无可用域名，请联系管理员添加域名配置。
             </div>
             <?php endif; ?>
+            </div>
         </main>
     </div>
 </div>

@@ -39,7 +39,8 @@ include 'includes/header.php';
         <?php include 'includes/sidebar.php'; ?>
         
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <div class="main-content">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3" style="border-bottom: 1px solid rgba(255, 255, 255, 0.2);">
                 <h1 class="h2">我的DNS记录</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
                     <a href="dashboard.php" class="btn btn-primary">
@@ -216,6 +217,7 @@ include 'includes/header.php';
                     </div>
                     <?php endif; ?>
                 </div>
+            </div>
             </div>
         </main>
     </div>

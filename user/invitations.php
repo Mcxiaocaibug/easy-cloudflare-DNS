@@ -66,7 +66,8 @@ include 'includes/header.php';
         <?php include 'includes/sidebar.php'; ?>
         
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <div class="main-content">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3" style="border-bottom: 1px solid rgba(255, 255, 255, 0.2);">
                 <h1 class="h2"><i class="fas fa-user-friends me-2"></i>邀请管理</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
 
@@ -288,6 +289,7 @@ include 'includes/header.php';
                     <li>同一用户只能使用同一邀请码注册一次</li>
                     <li><strong class="text-primary">每个用户只有一个专属邀请码</strong></li>
                 </ul>
+            </div>
             </div>
         </main>
     </div>
