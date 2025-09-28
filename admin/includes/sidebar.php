@@ -15,18 +15,8 @@
                 </h6>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'channels.php' ? 'active' : ''; ?>" href="channels.php">
-                    <i class="fas fa-plug me-2"></i>API渠道
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'cloudflare_accounts.php' ? 'active' : ''; ?>" href="cloudflare_accounts.php">
-                    <i class="fab fa-cloudflare me-2"></i>Cloudflare账户
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'rainbow_accounts.php' ? 'active' : ''; ?>" href="rainbow_accounts.php">
-                    <i class="fas fa-rainbow me-2"></i>彩虹DNS账户
+                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'channels_management.php' ? 'active' : ''; ?>" href="channels_management.php">
+                    <i class="fas fa-plug me-2"></i>渠道管理
                 </a>
             </li>
             

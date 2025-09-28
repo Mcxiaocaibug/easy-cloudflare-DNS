@@ -1,5 +1,18 @@
     <!-- Bootstrap JS -->
-    <script src="../assets/js/bootstrap.bundle.min.js"></script>
+    <?php 
+    // 检测调用此footer的脚本路径来确定资源路径
+    $calling_script = isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '';
+    $calling_dir = dirname($calling_script);
+    
+    if (strpos($calling_dir, '/admin/channels') !== false) {
+        $assets_path = '../../assets/';
+    } elseif (strpos($calling_dir, '/admin') !== false) {
+        $assets_path = '../assets/';
+    } else {
+        $assets_path = 'assets/';
+    }
+    ?>
+    <script src="<?php echo $assets_path; ?>js/bootstrap.bundle.min.js"></script>
     
     <!-- 自定义JS -->
     <script>

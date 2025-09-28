@@ -6,9 +6,22 @@
     <title><?php echo isset($page_title) ? $page_title . ' - ' : ''; ?>管理后台 - <?php echo getSetting('site_name', 'DNS管理系统'); ?></title>
     
     <!-- Bootstrap CSS -->
-    <link href="../assets/css/bootstrap.min.css" rel="stylesheet">
+    <?php 
+    // 检测调用此header的脚本路径来确定资源路径
+    $calling_script = isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '';
+    $calling_dir = dirname($calling_script);
+    
+    if (strpos($calling_dir, '/admin/channels') !== false) {
+        $assets_path = '../../assets/';
+    } elseif (strpos($calling_dir, '/admin') !== false) {
+        $assets_path = '../assets/';
+    } else {
+        $assets_path = 'assets/';
+    }
+    ?>
+    <link href="<?php echo $assets_path; ?>css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
-    <link href="../assets/css/fontawesome.min.css" rel="stylesheet">
+    <link href="<?php echo $assets_path; ?>css/fontawesome.min.css" rel="stylesheet">
     
     <style>
         /* 全局背景设置 */

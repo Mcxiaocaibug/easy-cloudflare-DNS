@@ -332,15 +332,143 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_domains'
     redirect('domains.php');
 }
 
+// 处理获取DNS记录数量（AJAX endpoint）
+if ($action === 'get_dns_count' && getGet('domain_id')) {
+    $domain_id = (int)getGet('domain_id');
+    $record_count = $db->querySingle("SELECT COUNT(*) FROM dns_records WHERE domain_id = $domain_id");
+    header('Content-Type: application/json');
+    echo json_encode(['record_count' => $record_count]);
+    exit;
+}
+
 // 处理删除域名
 if ($action === 'delete' && getGet('id')) {
     $id = (int)getGet('id');
-    $domain = $db->querySingle("SELECT domain_name FROM domains WHERE id = $id", true);
+    $domain = $db->querySingle("SELECT * FROM domains WHERE id = $id", true);
     
     if ($domain) {
-        $db->exec("DELETE FROM domains WHERE id = $id");
-        logAction('admin', $_SESSION['admin_id'], 'delete_domain', "删除域名: {$domain['domain_name']}");
-        showSuccess('域名删除成功！');
+        $deleted_count = 0;
+        $skipped_count = 0;
+        $error_count = 0;
+        $provider_errors = [];
+        
+        try {
+            // 第一步：获取该域名下的所有DNS记录
+            $dns_records = [];
+            $result = $db->query("SELECT * FROM dns_records WHERE domain_id = $id");
+            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+                $dns_records[] = $row;
+            }
+            
+            $total_records = count($dns_records);
+            
+            // 第二步：尝试从DNS提供商删除记录
+            if ($total_records > 0) {
+                $provider_type = $domain['provider_type'] ?? 'cloudflare';
+                
+                if ($provider_type === 'cloudflare') {
+                    // 处理Cloudflare记录
+                    try {
+                        $cf = new CloudflareAPI($domain['api_key'], $domain['email']);
+                        
+                        foreach ($dns_records as $record) {
+                            if (!empty($record['cloudflare_id'])) {
+                                try {
+                                    // 尝试从Cloudflare删除
+                                    $cf->deleteDNSRecord($domain['zone_id'], $record['cloudflare_id']);
+                                    $deleted_count++;
+                                } catch (Exception $e) {
+                                    // 记录提供商删除失败的错误，但继续处理
+                                    $provider_errors[] = "记录 {$record['subdomain']}.{$domain['domain_name']} 删除失败: " . $e->getMessage();
+                                    $error_count++;
+                                }
+                            } else {
+                                // 没有cloudflare_id的记录直接跳过
+                                $skipped_count++;
+                            }
+                        }
+                    } catch (Exception $e) {
+                        // API连接失败，记录错误但继续删除本地记录
+                        $provider_errors[] = "无法连接到Cloudflare API: " . $e->getMessage();
+                        $error_count = $total_records;
+                    }
+                } elseif ($provider_type === 'rainbow') {
+                    // 处理彩虹DNS记录
+                    try {
+                        require_once '../config/rainbow_dns.php';
+                        $rainbow = new RainbowDNSAPI($domain['provider_uid'], $domain['api_key'], $domain['api_base_url']);
+                        
+                        foreach ($dns_records as $record) {
+                            if (!empty($record['cloudflare_id'])) { // 在彩虹DNS中也使用这个字段存储记录ID
+                                try {
+                                    // 尝试从彩虹DNS删除（需要domain_id和record_id）
+                                    $rainbow->deleteDNSRecord($domain['zone_id'], $record['cloudflare_id']);
+                                    $deleted_count++;
+                                } catch (Exception $e) {
+                                    $provider_errors[] = "记录 {$record['subdomain']}.{$domain['domain_name']} 删除失败: " . $e->getMessage();
+                                    $error_count++;
+                                }
+                            } else {
+                                $skipped_count++;
+                            }
+                        }
+                    } catch (Exception $e) {
+                        $provider_errors[] = "无法连接到彩虹DNS API: " . $e->getMessage();
+                        $error_count = $total_records;
+                    }
+                } else {
+                    // 自定义或其他类型的DNS记录，跳过提供商删除
+                    $skipped_count = $total_records;
+                }
+            }
+            
+            // 第三步：删除所有本地DNS记录（无论提供商删除是否成功）
+            $db->exec("DELETE FROM dns_records WHERE domain_id = $id");
+            
+            // 第四步：删除域名本身
+            $db->exec("DELETE FROM domains WHERE id = $id");
+            
+            // 记录日志
+            logAction('admin', $_SESSION['admin_id'], 'delete_domain', "删除域名: {$domain['domain_name']} (记录总数: $total_records, 成功删除: $deleted_count, 跳过: $skipped_count, 错误: $error_count)");
+            
+            // 生成详细的成功消息
+            $message = "域名 {$domain['domain_name']} 删除成功！";
+            if ($total_records > 0) {
+                $message .= " 共处理 $total_records 条DNS记录";
+                if ($deleted_count > 0) {
+                    $message .= "，成功从DNS提供商删除 $deleted_count 条";
+                }
+                if ($skipped_count > 0) {
+                    $message .= "，跳过 $skipped_count 条";
+                }
+                if ($error_count > 0) {
+                    $message .= "，$error_count 条删除失败但已从本地清除";
+                }
+            }
+            
+            showSuccess($message);
+            
+            // 如果有提供商删除错误，显示详细信息
+            if (!empty($provider_errors)) {
+                $error_detail = "DNS提供商删除过程中的详细错误：\\n" . implode("\\n", array_slice($provider_errors, 0, 5));
+                if (count($provider_errors) > 5) {
+                    $error_detail .= "\\n... 还有 " . (count($provider_errors) - 5) . " 个错误";
+                }
+                showWarning("部分DNS记录无法从提供商删除，但域名和本地记录已清理完成。详细信息：" . $error_detail);
+            }
+            
+        } catch (Exception $e) {
+            // 如果删除过程中出现严重错误，尝试至少删除本地记录
+            try {
+                $db->exec("DELETE FROM dns_records WHERE domain_id = $id");
+                $db->exec("DELETE FROM domains WHERE id = $id");
+                logAction('admin', $_SESSION['admin_id'], 'delete_domain', "强制删除域名: {$domain['domain_name']} (遇到错误: {$e->getMessage()})");
+                showWarning("域名删除完成，但删除过程中遇到错误：" . $e->getMessage());
+            } catch (Exception $cleanup_error) {
+                logAction('admin', $_SESSION['admin_id'], 'delete_domain_failed', "删除域名失败: {$domain['domain_name']} (错误: {$cleanup_error->getMessage()})");
+                showError('域名删除失败：' . $cleanup_error->getMessage());
+            }
+        }
     } else {
         showError('域名不存在！');
     }
@@ -394,16 +522,119 @@ include 'includes/header.php';
                         </div>
                     </div>
                     <div class="btn-group">
-                        <a href="cloudflare_accounts.php" class="btn btn-outline-info">
-                            <i class="fab fa-cloudflare me-1"></i>管理CF账户
-                        </a>
-                        <a href="rainbow_accounts.php" class="btn btn-outline-warning">
-                            <i class="fas fa-rainbow me-1"></i>管理彩虹账户
+                        <a href="channels_management.php" class="btn btn-outline-info">
+                            <i class="fas fa-plug me-1"></i>渠道管理
                         </a>
                     </div>
                 </div>
             </div>
             
+            <?php if ($action === 'select_domains' && isset($_SESSION['fetched_zones'])): ?>
+            <!-- 选择域名界面 -->
+            <div class="card shadow">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">选择要添加的域名</h6>
+                    <small class="text-muted">从Cloudflare账户: <?php echo htmlspecialchars($_SESSION['selected_account']['name']); ?></small>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="domains.php" onsubmit="return validateSelection()">
+                        <div class="mb-3">
+                            <label class="form-check-label">
+                                <input type="checkbox" id="selectAll" onchange="toggleAll(this)"> 全选/取消全选
+                            </label>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th width="50">选择</th>
+                                        <th>域名</th>
+                                        <th>Zone ID</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($_SESSION['fetched_zones'] as $zone): ?>
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input domain-checkbox" 
+                                                   name="selected_domains[]" value="<?php echo htmlspecialchars($zone['id']); ?>">
+                                        </td>
+                                        <td><?php echo htmlspecialchars($zone['name']); ?></td>
+                                        <td><code><?php echo htmlspecialchars($zone['id']); ?></code></td>
+                                        <td>
+                                            <span class="badge <?php echo $zone['status'] === 'active' ? 'bg-success' : 'bg-warning'; ?>">
+                                                <?php echo $zone['status']; ?>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" name="add_selected_domains" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>添加选中的域名
+                            </button>
+                            <a href="domains.php" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>返回域名列表
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <?php elseif ($action === 'select_rainbow_domains' && isset($_SESSION['fetched_rainbow_domains'])): ?>
+            <!-- 选择彩虹DNS域名界面 -->
+            <div class="card shadow">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">选择要添加的彩虹DNS域名</h6>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="domains.php" onsubmit="return validateRainbowSelection()">
+                        <div class="mb-3">
+                            <label class="form-check-label">
+                                <input type="checkbox" id="selectAllRainbow" onchange="toggleAllRainbow(this)"> 全选/取消全选
+                            </label>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th width="50">选择</th>
+                                        <th>域名</th>
+                                        <th>Zone ID</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($_SESSION['fetched_rainbow_domains'] as $domain): ?>
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input rainbow-domain-checkbox" 
+                                                   name="selected_domains[]" value="<?php echo htmlspecialchars($domain['id']); ?>">
+                                        </td>
+                                        <td><?php echo htmlspecialchars($domain['name']); ?></td>
+                                        <td><code><?php echo htmlspecialchars($domain['thirdid']); ?></code></td>
+                                        <td>
+                                            <span class="badge bg-info">彩虹DNS</span>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" name="add_selected_rainbow_domains" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>添加选中的域名
+                            </button>
+                            <a href="domains.php" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>返回域名列表
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <?php else: ?>
             <!-- 域名列表 -->
             <div class="card shadow">
                 <div class="card-header">
@@ -468,7 +699,7 @@ include 'includes/header.php';
                                         </a>
                                         <a href="?action=delete&id=<?php echo $domain['id']; ?>" 
                                            class="btn btn-sm btn-danger" 
-                                           onclick="return confirmDelete('确定要删除域名 <?php echo htmlspecialchars($domain['domain_name']); ?> 吗？')">
+                                           onclick="return confirmDomainDelete('<?php echo htmlspecialchars($domain['domain_name']); ?>', <?php echo $domain['id']; ?>)">
                                             <i class="fas fa-trash"></i>
                                         </a>
                                     </td>
@@ -477,80 +708,6 @@ include 'includes/header.php';
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </div>
-            
-            <?php if ($action === 'select_rainbow_domains' && isset($_SESSION['fetched_rainbow_domains'])): ?>
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">选择要添加的彩虹DNS域名</h5>
-                </div>
-                <div class="card-body">
-                    <form method="POST">
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            请选择要添加到系统中的彩虹DNS域名。已存在的域名将显示为灰色且无法选择。
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-bordered">
-                                <thead>
-                                    <tr>
-                                        <th width="50">
-                                            <input type="checkbox" id="selectAllRainbow" onchange="toggleAllRainbow(this)">
-                                        </th>
-                                        <th>域名</th>
-                                        <th>类型</th>
-                                        <th>记录数</th>
-                                        <th>状态</th>
-                                        <th>已存在</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($_SESSION['fetched_rainbow_domains'] as $domain): ?>
-                                    <?php 
-                                        $exists = $db->querySingle("SELECT COUNT(*) FROM domains WHERE domain_name = '{$domain['name']}'");
-                                    ?>
-                                    <tr <?php echo $exists ? 'class="table-secondary"' : ''; ?>>
-                                        <td>
-                                            <?php if (!$exists): ?>
-                                            <input type="checkbox" name="selected_domains[]" value="<?php echo htmlspecialchars($domain['id']); ?>" class="rainbow-domain-checkbox">
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <strong><?php echo htmlspecialchars($domain['name']); ?></strong>
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-info"><?php echo htmlspecialchars($domain['typename'] ?? '未知'); ?></span>
-                                        </td>
-                                        <td><?php echo $domain['recordcount'] ?? 0; ?></td>
-                                        <td>
-                                            <?php if (isset($domain['is_sso']) && $domain['is_sso']): ?>
-                                                <span class="badge bg-success">可对接</span>
-                                            <?php else: ?>
-                                                <span class="badge bg-warning">不可对接</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <?php if ($exists): ?>
-                                                <span class="badge bg-secondary">已存在</span>
-                                            <?php else: ?>
-                                                <span class="badge bg-success">可添加</span>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center mt-3">
-                            <a href="domains.php" class="btn btn-secondary">
-                                <i class="fas fa-arrow-left me-1"></i>返回域名列表
-                            </a>
-                            <button type="submit" name="add_selected_rainbow_domains" class="btn btn-warning">
-                                <i class="fas fa-plus me-1"></i>添加选中的域名
-                            </button>
-                        </div>
-                    </form>
                 </div>
             </div>
             <?php endif; ?>
@@ -673,7 +830,7 @@ include 'includes/header.php';
                         </select>
                         <div class="form-text">
                             如果没有可选账户，请先到 
-                            <a href="rainbow_accounts.php" target="_blank">彩虹DNS账户管理</a> 
+                            <a href="channels/" target="_blank">渠道管理</a> 
                             添加账户
                         </div>
                     </div>
@@ -715,6 +872,13 @@ function validateSelection() {
     return true;
 }
 
+function toggleAllRainbow(source) {
+    const checkboxes = document.querySelectorAll('.rainbow-domain-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = source.checked;
+    });
+}
+
 function validateRainbowSelection() {
     const checkboxes = document.querySelectorAll('.rainbow-domain-checkbox:checked');
     if (checkboxes.length === 0) {
@@ -722,6 +886,35 @@ function validateRainbowSelection() {
         return false;
     }
     return true;
+}
+
+function confirmDomainDelete(domainName, domainId) {
+    // 获取DNS记录数量（通过AJAX）
+    fetch('?action=get_dns_count&domain_id=' + domainId)
+        .then(response => response.json())
+        .then(data => {
+            let message = `确定要删除域名 "${domainName}" 吗？\n\n`;
+            message += `删除过程将包括：\n`;
+            message += `1. 尝试从DNS提供商删除 ${data.record_count} 条DNS记录\n`;
+            message += `2. 清除所有本地DNS记录\n`;
+            message += `3. 删除域名配置\n\n`;
+            message += `注意：\n`;
+            message += `- 如果DNS提供商删除失败，本地记录仍会被清除\n`;
+            message += `- 此操作不可恢复\n\n`;
+            message += `是否继续？`;
+            
+            if (confirm(message)) {
+                window.location.href = '?action=delete&id=' + domainId;
+            }
+        })
+        .catch(error => {
+            // 如果AJAX失败，使用简单确认
+            if (confirm(`确定要删除域名 "${domainName}" 及其所有DNS记录吗？\n\n此操作不可恢复！`)) {
+                window.location.href = '?action=delete&id=' + domainId;
+            }
+        });
+    
+    return false; // 阻止直接跳转
 }
 </script>
 
