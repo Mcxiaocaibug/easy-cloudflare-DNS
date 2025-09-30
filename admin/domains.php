@@ -5,6 +5,11 @@ require_once '../config/cloudflare.php';
 require_once '../config/dns_manager.php';
 require_once '../includes/functions.php';
 
+// 确保数据库连接可用
+if (!isset($db)) {
+    $db = Database::getInstance()->getConnection();
+}
+
 checkAdminLogin();
 
 $db = Database::getInstance()->getConnection();
@@ -158,6 +163,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['fetch_rainbow_domains
     redirect('domains.php');
 }
 
+// 处理从DNSPod账户获取域名列表
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['fetch_dnspod_domains_from_account'])) {
+    $dnspod_account_id = getPost('dnspod_account_id');
+    
+    if ($dnspod_account_id) {
+        $account = $db->querySingle("SELECT * FROM dnspod_accounts WHERE id = $dnspod_account_id", true);
+        if ($account) {
+            try {
+                require_once '../config/dns_providers.php';
+                
+                // 直接创建DNSPod配置，不经过转换
+                $config = [
+                    'ak' => $account['secret_id'],
+                    'sk' => $account['secret_key'], 
+                    'domain' => '',
+                    'proxy' => false
+                ];
+                
+                $dnspod_api = DNSProviderFactory::create('dnspod', $config);
+                $domains_response = $dnspod_api->getDomainList();
+                
+                if ($domains_response && isset($domains_response['list'])) {
+                    $_SESSION['fetched_dnspod_domains'] = $domains_response['list'];
+                    $_SESSION['dnspod_config'] = [
+                        'secret_id' => $account['secret_id'],
+                        'secret_key' => $account['secret_key']
+                    ];
+                    
+                    showSuccess("成功获取到 " . count($domains_response['list']) . " 个DNSPod域名，请选择要添加的域名！");
+                    redirect('domains.php?action=select_dnspod_domains');
+                } else {
+                    showError('未获取到DNSPod域名列表！返回数据: ' . json_encode($domains_response));
+                }
+            } catch (Exception $e) {
+                showError('获取DNSPod域名失败: ' . $e->getMessage() . ' 在文件: ' . $e->getFile() . ' 第 ' . $e->getLine() . ' 行');
+            }
+        } else {
+            showError('DNSPod账户不存在！');
+        }
+    } else {
+        showError('请选择DNSPod账户！');
+    }
+    redirect('domains.php');
+}
+
+// 处理从PowerDNS账户获取域名列表
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['fetch_powerdns_domains_from_account'])) {
+    $powerdns_account_id = getPost('powerdns_account_id');
+    
+    if ($powerdns_account_id) {
+        $account = $db->querySingle("SELECT * FROM powerdns_accounts WHERE id = $powerdns_account_id", true);
+        if ($account) {
+            try {
+                require_once '../config/dns_providers.php';
+                $config = DNSProviderFactory::convertConfig('powerdns', [
+                    'api_url' => $account['api_url'],
+                    'api_key' => $account['api_key'],
+                    'domain' => '', // 获取域名列表时不需要指定域名
+                    'domain_id' => '' // 获取域名列表时不需要指定域名ID
+                ]);
+                
+                $powerdns_api = DNSProviderFactory::create('powerdns', $config);
+                $domains_response = $powerdns_api->getDomainList();
+                
+                if ($domains_response && isset($domains_response['list'])) {
+                    $_SESSION['fetched_powerdns_domains'] = $domains_response['list'];
+                    $_SESSION['powerdns_config'] = [
+                        'api_url' => $account['api_url'],
+                        'api_key' => $account['api_key'],
+                        'server_id' => $account['server_id']
+                    ];
+                    
+                    showSuccess("成功获取到 " . count($domains_response['list']) . " 个PowerDNS域名，请选择要添加的域名！");
+                    redirect('domains.php?action=select_powerdns_domains');
+                } else {
+                    showError('未获取到PowerDNS域名列表！');
+                }
+            } catch (Exception $e) {
+                showError('获取PowerDNS域名失败: ' . $e->getMessage());
+            }
+        } else {
+            showError('PowerDNS账户不存在！');
+        }
+    } else {
+        showError('请选择PowerDNS账户！');
+    }
+    redirect('domains.php');
+}
+
 // 处理批量添加彩虹DNS域名
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_rainbow_domains'])) {
     $selected_domains = isset($_POST['selected_domains']) ? $_POST['selected_domains'] : [];
@@ -204,6 +298,118 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_rainbow_
         
         logAction('admin', $_SESSION['admin_id'], 'batch_add_rainbow_domains', "批量添加彩虹DNS域名，成功添加了 $added_count 个域名");
         showSuccess("成功添加 $added_count 个彩虹DNS域名！");
+    } else {
+        if (empty($selected_domains)) {
+            showError('请至少选择一个域名进行添加！');
+        } else {
+            showError('会话已过期，请重新获取域名列表！');
+        }
+    }
+    redirect('domains.php');
+}
+
+// 处理批量添加DNSPod域名
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_dnspod_domains'])) {
+    $selected_domains = isset($_POST['selected_domains']) ? $_POST['selected_domains'] : [];
+    
+    if (!empty($selected_domains) && isset($_SESSION['dnspod_config'])) {
+        $config = $_SESSION['dnspod_config'];
+        $domains = $_SESSION['fetched_dnspod_domains'];
+        
+        $added_count = 0;
+        foreach ($selected_domains as $domain_id) {
+            // 找到对应的域名信息
+            $domain_info = null;
+            foreach ($domains as $domain) {
+                if ($domain['DomainId'] == $domain_id) {
+                    $domain_info = $domain;
+                    break;
+                }
+            }
+            
+            if ($domain_info) {
+                // 检查域名是否已存在
+                $exists = $db->querySingle("SELECT COUNT(*) FROM domains WHERE domain_name = '{$domain_info['Domain']}'");
+                if (!$exists) {
+                    $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, provider_type, provider_uid, api_base_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->bindValue(1, $domain_info['Domain'], SQLITE3_TEXT);
+                    $stmt->bindValue(2, $config['secret_id'], SQLITE3_TEXT);
+                    $stmt->bindValue(3, '', SQLITE3_TEXT); // DNSPod不需要email
+                    $stmt->bindValue(4, $domain_info['DomainId'], SQLITE3_TEXT);
+                    $stmt->bindValue(5, 0, SQLITE3_INTEGER); // DNSPod不支持代理
+                    $stmt->bindValue(6, 'dnspod', SQLITE3_TEXT);
+                    $stmt->bindValue(7, $config['secret_key'], SQLITE3_TEXT);
+                    $stmt->bindValue(8, '', SQLITE3_TEXT); // DNSPod不需要api_base_url
+                    
+                    if ($stmt->execute()) {
+                        $added_count++;
+                    }
+                }
+            }
+        }
+        
+        // 清除session数据
+        unset($_SESSION['fetched_dnspod_domains']);
+        unset($_SESSION['dnspod_config']);
+        
+        logAction('admin', $_SESSION['admin_id'], 'batch_add_dnspod_domains', "批量添加DNSPod域名，成功添加了 $added_count 个域名");
+        showSuccess("成功添加 $added_count 个DNSPod域名！");
+    } else {
+        if (empty($selected_domains)) {
+            showError('请至少选择一个域名进行添加！');
+        } else {
+            showError('会话已过期，请重新获取域名列表！');
+        }
+    }
+    redirect('domains.php');
+}
+
+// 处理批量添加PowerDNS域名
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_powerdns_domains'])) {
+    $selected_domains = isset($_POST['selected_domains']) ? $_POST['selected_domains'] : [];
+    
+    if (!empty($selected_domains) && isset($_SESSION['powerdns_config'])) {
+        $config = $_SESSION['powerdns_config'];
+        $domains = $_SESSION['fetched_powerdns_domains'];
+        
+        $added_count = 0;
+        foreach ($selected_domains as $domain_id) {
+            // 找到对应的域名信息
+            $domain_info = null;
+            foreach ($domains as $domain) {
+                if ($domain['DomainId'] == $domain_id) {
+                    $domain_info = $domain;
+                    break;
+                }
+            }
+            
+            if ($domain_info) {
+                // 检查域名是否已存在
+                $exists = $db->querySingle("SELECT COUNT(*) FROM domains WHERE domain_name = '{$domain_info['Domain']}'");
+                if (!$exists) {
+                    $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, provider_type, provider_uid, api_base_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->bindValue(1, $domain_info['Domain'], SQLITE3_TEXT);
+                    $stmt->bindValue(2, $config['api_key'], SQLITE3_TEXT);
+                    $stmt->bindValue(3, '', SQLITE3_TEXT); // PowerDNS不需要email
+                    $stmt->bindValue(4, $domain_info['DomainId'], SQLITE3_TEXT);
+                    $stmt->bindValue(5, 0, SQLITE3_INTEGER); // PowerDNS不支持代理
+                    $stmt->bindValue(6, 'powerdns', SQLITE3_TEXT);
+                    $stmt->bindValue(7, $config['server_id'], SQLITE3_TEXT);
+                    $stmt->bindValue(8, $config['api_url'], SQLITE3_TEXT);
+                    
+                    if ($stmt->execute()) {
+                        $added_count++;
+                    }
+                }
+            }
+        }
+        
+        // 清除session数据
+        unset($_SESSION['fetched_powerdns_domains']);
+        unset($_SESSION['powerdns_config']);
+        
+        logAction('admin', $_SESSION['admin_id'], 'batch_add_powerdns_domains', "批量添加PowerDNS域名，成功添加了 $added_count 个域名");
+        showSuccess("成功添加 $added_count 个PowerDNS域名！");
     } else {
         if (empty($selected_domains)) {
             showError('请至少选择一个域名进行添加！');
@@ -518,6 +724,12 @@ include 'includes/header.php';
                                 <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#fetchRainbowDomainsModal">
                                     <i class="fas fa-rainbow me-2"></i>从彩虹DNS获取
                                 </a></li>
+                                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#fetchDnspodDomainsModal">
+                                    <i class="fas fa-cloud me-2"></i>从DNSPod获取
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#fetchPowerdnsDomainsModal">
+                                    <i class="fas fa-server me-2"></i>从PowerDNS获取
+                                </a></li>
                             </ul>
                         </div>
                     </div>
@@ -574,6 +786,110 @@ include 'includes/header.php';
                         </div>
                         <div class="mt-3">
                             <button type="submit" name="add_selected_domains" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>添加选中的域名
+                            </button>
+                            <a href="domains.php" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>返回域名列表
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <?php elseif ($action === 'select_dnspod_domains' && isset($_SESSION['fetched_dnspod_domains'])): ?>
+            <!-- 选择DNSPod域名界面 -->
+            <div class="card shadow">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">选择要添加的DNSPod域名</h6>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="domains.php" onsubmit="return validateDnspodSelection()">
+                        <div class="mb-3">
+                            <label class="form-check-label">
+                                <input type="checkbox" id="selectAllDnspod" onchange="toggleAllDnspod(this)"> 全选/取消全选
+                            </label>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th width="50">选择</th>
+                                        <th>域名</th>
+                                        <th>域名ID</th>
+                                        <th>记录数</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($_SESSION['fetched_dnspod_domains'] as $domain): ?>
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input dnspod-domain-checkbox" 
+                                                   name="selected_domains[]" value="<?php echo htmlspecialchars($domain['DomainId']); ?>">
+                                        </td>
+                                        <td><?php echo htmlspecialchars($domain['Domain']); ?></td>
+                                        <td><code><?php echo htmlspecialchars($domain['DomainId']); ?></code></td>
+                                        <td><?php echo $domain['RecordCount'] ?? 0; ?></td>
+                                        <td>
+                                            <span class="badge bg-success">DNSPod</span>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" name="add_selected_dnspod_domains" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>添加选中的域名
+                            </button>
+                            <a href="domains.php" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>返回域名列表
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <?php elseif ($action === 'select_powerdns_domains' && isset($_SESSION['fetched_powerdns_domains'])): ?>
+            <!-- 选择PowerDNS域名界面 -->
+            <div class="card shadow">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">选择要添加的PowerDNS域名</h6>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="domains.php" onsubmit="return validatePowerdnsSelection()">
+                        <div class="mb-3">
+                            <label class="form-check-label">
+                                <input type="checkbox" id="selectAllPowerdns" onchange="toggleAllPowerdns(this)"> 全选/取消全选
+                            </label>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th width="50">选择</th>
+                                        <th>域名</th>
+                                        <th>域名ID</th>
+                                        <th>状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($_SESSION['fetched_powerdns_domains'] as $domain): ?>
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" class="form-check-input powerdns-domain-checkbox" 
+                                                   name="selected_domains[]" value="<?php echo htmlspecialchars($domain['DomainId']); ?>">
+                                        </td>
+                                        <td><?php echo htmlspecialchars($domain['Domain']); ?></td>
+                                        <td><code><?php echo htmlspecialchars($domain['DomainId']); ?></code></td>
+                                        <td>
+                                            <span class="badge bg-primary">PowerDNS</span>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" name="add_selected_powerdns_domains" class="btn btn-primary">
                                 <i class="fas fa-plus me-1"></i>添加选中的域名
                             </button>
                             <a href="domains.php" class="btn btn-secondary">
@@ -661,8 +977,16 @@ include 'includes/header.php';
                                 <?php 
                                     // 确保provider_type字段存在
                                     $provider_type = $domain['provider_type'] ?? 'cloudflare';
-                                    $provider_name = $provider_type === 'rainbow' ? '彩虹聚合DNS' : 'Cloudflare';
-                                    $provider_class = $provider_type === 'rainbow' ? 'bg-warning' : 'bg-info';
+                                    $provider_configs = [
+                                        'cloudflare' => ['name' => 'Cloudflare', 'class' => 'bg-info'],
+                                        'rainbow' => ['name' => '彩虹DNS', 'class' => 'bg-warning'],
+                                        'dnspod' => ['name' => 'DNSPod', 'class' => 'bg-success'],
+                                        'powerdns' => ['name' => 'PowerDNS', 'class' => 'bg-primary'],
+                                        'custom' => ['name' => '自定义', 'class' => 'bg-secondary']
+                                    ];
+                                    $provider_config = $provider_configs[$provider_type] ?? $provider_configs['cloudflare'];
+                                    $provider_name = $provider_config['name'];
+                                    $provider_class = $provider_config['class'];
                                 ?>
                                 <tr>
                                     <td><?php echo $domain['id']; ?></td>
@@ -830,14 +1154,102 @@ include 'includes/header.php';
                         </select>
                         <div class="form-text">
                             如果没有可选账户，请先到 
-                            <a href="channels/" target="_blank">渠道管理</a> 
-                            添加账户
+                            <a href="channels_management.php" target="_blank">渠道管理</a> 
+                            添加彩虹DNS账户
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                     <button type="submit" name="fetch_rainbow_domains_from_account" class="btn btn-warning">获取域名列表</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 获取DNSPod域名列表模态框 -->
+<div class="modal fade" id="fetchDnspodDomainsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">获取DNSPod域名列表</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        系统将从选择的DNSPod账户获取域名列表，然后您可以选择要添加的域名。
+                    </div>
+                    <div class="mb-3">
+                        <label for="fetch_dnspod_account_id" class="form-label">选择DNSPod账户</label>
+                        <select class="form-control" id="fetch_dnspod_account_id" name="dnspod_account_id" required>
+                            <option value="">请选择账户</option>
+                            <?php 
+                            // 获取DNSPod账户列表
+                            $dnspod_accounts_result = $db->query("SELECT * FROM dnspod_accounts WHERE status = 1 ORDER BY name");
+                            while ($dnspod_account = $dnspod_accounts_result->fetchArray(SQLITE3_ASSOC)): 
+                            ?>
+                            <option value="<?php echo $dnspod_account['id']; ?>">
+                                <?php echo htmlspecialchars($dnspod_account['name']); ?> (<?php echo htmlspecialchars($dnspod_account['secret_id']); ?>)
+                            </option>
+                            <?php endwhile; ?>
+                        </select>
+                        <div class="form-text">
+                            如果没有可选账户，请先到 
+                            <a href="channels_management.php" target="_blank">渠道管理</a> 
+                            添加DNSPod账户
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" name="fetch_dnspod_domains_from_account" class="btn btn-success">获取域名列表</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 获取PowerDNS域名列表模态框 -->
+<div class="modal fade" id="fetchPowerdnsDomainsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">获取PowerDNS域名列表</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        系统将从选择的PowerDNS账户获取域名列表，然后您可以选择要添加的域名。
+                    </div>
+                    <div class="mb-3">
+                        <label for="fetch_powerdns_account_id" class="form-label">选择PowerDNS账户</label>
+                        <select class="form-control" id="fetch_powerdns_account_id" name="powerdns_account_id" required>
+                            <option value="">请选择账户</option>
+                            <?php 
+                            // 获取PowerDNS账户列表
+                            $powerdns_accounts_result = $db->query("SELECT * FROM powerdns_accounts WHERE status = 1 ORDER BY name");
+                            while ($powerdns_account = $powerdns_accounts_result->fetchArray(SQLITE3_ASSOC)): 
+                            ?>
+                            <option value="<?php echo $powerdns_account['id']; ?>">
+                                <?php echo htmlspecialchars($powerdns_account['name']); ?> (<?php echo htmlspecialchars($powerdns_account['api_url']); ?>)
+                            </option>
+                            <?php endwhile; ?>
+                        </select>
+                        <div class="form-text">
+                            如果没有可选账户，请先到 
+                            <a href="channels_management.php" target="_blank">渠道管理</a> 
+                            添加PowerDNS账户
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" name="fetch_powerdns_domains_from_account" class="btn btn-primary">获取域名列表</button>
                 </div>
             </form>
         </div>
@@ -883,6 +1295,38 @@ function validateRainbowSelection() {
     const checkboxes = document.querySelectorAll('.rainbow-domain-checkbox:checked');
     if (checkboxes.length === 0) {
         alert('请至少选择一个彩虹DNS域名进行添加！');
+        return false;
+    }
+    return true;
+}
+
+function toggleAllDnspod(source) {
+    const checkboxes = document.querySelectorAll('.dnspod-domain-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = source.checked;
+    });
+}
+
+function validateDnspodSelection() {
+    const checkboxes = document.querySelectorAll('.dnspod-domain-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('请至少选择一个DNSPod域名进行添加！');
+        return false;
+    }
+    return true;
+}
+
+function toggleAllPowerdns(source) {
+    const checkboxes = document.querySelectorAll('.powerdns-domain-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = source.checked;
+    });
+}
+
+function validatePowerdnsSelection() {
+    const checkboxes = document.querySelectorAll('.powerdns-domain-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('请至少选择一个PowerDNS域名进行添加！');
         return false;
     }
     return true;

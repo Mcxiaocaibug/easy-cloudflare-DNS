@@ -262,7 +262,7 @@ include 'includes/header.php';
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card shadow-sm border-0">
-                        <div class="card-header bg-gradient-primary text-white">
+                        <div class="card-header bg-gradient-primary text-white" style="background: transparent !important;">
                             <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>系统概览</h5>
                         </div>
                         <div class="card-body p-0">
@@ -453,7 +453,7 @@ include 'includes/header.php';
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card shadow-sm border-0">
-                        <div class="card-header bg-light">
+                        <div class="card-header" style="background: transparent !important;">
                             <h6 class="mb-0"><i class="fas fa-chart-area me-2"></i>最近7天用户注册趋势</h6>
                         </div>
                         <div class="card-body">
@@ -480,7 +480,7 @@ include 'includes/header.php';
                 <!-- 最近用户 -->
                 <div class="col-lg-6 mb-4">
                     <div class="card shadow-sm border-0 h-100">
-                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <div class="card-header d-flex justify-content-between align-items-center" style="background: transparent !important;">
                             <h6 class="mb-0"><i class="fas fa-user-plus me-2"></i>最近注册用户</h6>
                             <a href="users.php" class="btn btn-sm btn-outline-primary">查看全部</a>
                         </div>
@@ -522,7 +522,7 @@ include 'includes/header.php';
                 <!-- 最近DNS记录 -->
                 <div class="col-lg-6 mb-4">
                     <div class="card shadow-sm border-0 h-100">
-                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <div class="card-header d-flex justify-content-between align-items-center" style="background: transparent !important;">
                             <h6 class="mb-0"><i class="fas fa-dns me-2"></i>最近DNS记录</h6>
                             <a href="dns_records.php" class="btn btn-sm btn-outline-primary">查看全部</a>
                         </div>
@@ -566,7 +566,7 @@ include 'includes/header.php';
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card shadow-sm border-0">
-                        <div class="card-header bg-light">
+                        <div class="card-header" style="background: transparent !important;">
                             <h6 class="mb-0"><i class="fas fa-bolt me-2"></i>快速操作</h6>
                         </div>
                         <div class="card-body">

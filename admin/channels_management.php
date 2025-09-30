@@ -79,6 +79,31 @@ function initializeChannelTables($db) {
             $db->exec("ALTER TABLE rainbow_accounts ADD COLUMN description TEXT DEFAULT ''");
         }
         
+        // 创建或确保 dnspod_accounts 表存在
+        $db->exec("CREATE TABLE IF NOT EXISTS dnspod_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL DEFAULT '',
+            account_name TEXT DEFAULT '',
+            secret_id TEXT NOT NULL DEFAULT '',
+            secret_key TEXT NOT NULL DEFAULT '',
+            description TEXT DEFAULT '',
+            status INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        // 创建或确保 powerdns_accounts 表存在
+        $db->exec("CREATE TABLE IF NOT EXISTS powerdns_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL DEFAULT '',
+            account_name TEXT DEFAULT '',
+            api_url TEXT NOT NULL DEFAULT '',
+            api_key TEXT NOT NULL DEFAULT '',
+            server_id TEXT DEFAULT 'localhost',
+            description TEXT DEFAULT '',
+            status INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
         // 确保 domains 表支持自定义渠道
         $domain_columns = [];
         $result = $db->query("PRAGMA table_info(domains)");
@@ -146,6 +171,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])) {
             $stmt->bindValue(7, $description, SQLITE3_TEXT);
             $stmt->bindValue(8, $status, SQLITE3_INTEGER);
             
+        } else if ($channel_type === 'dnspod') {
+            // 添加DNSPod渠道 - 验证必需字段
+            if (empty($api_key) || empty($provider_uid)) {
+                throw new Exception('DNSPod需要填写SecretId和SecretKey');
+            }
+            
+            $stmt = $db->prepare("
+                INSERT INTO dnspod_accounts (name, account_name, secret_id, secret_key, description, status, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+            ");
+            $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
+            $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
+            $stmt->bindValue(3, $api_key, SQLITE3_TEXT); // API密钥作为SecretId
+            $stmt->bindValue(4, $provider_uid, SQLITE3_TEXT); // 用户ID作为SecretKey
+            $stmt->bindValue(5, $description, SQLITE3_TEXT);
+            $stmt->bindValue(6, $status, SQLITE3_INTEGER);
+            
+        } else if ($channel_type === 'powerdns') {
+            // 添加PowerDNS渠道 - 验证必需字段
+            if (empty($api_base_url) || empty($api_key)) {
+                throw new Exception('PowerDNS需要填写API URL和API密钥');
+            }
+            
+            $stmt = $db->prepare("
+                INSERT INTO powerdns_accounts (name, account_name, api_url, api_key, server_id, description, status, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ");
+            $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
+            $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
+            $stmt->bindValue(3, $api_base_url, SQLITE3_TEXT); // API基础URL
+            $stmt->bindValue(4, $api_key, SQLITE3_TEXT);
+            $stmt->bindValue(5, $provider_uid ?: 'localhost', SQLITE3_TEXT); // 服务器ID，默认localhost
+            $stmt->bindValue(6, $description, SQLITE3_TEXT);
+            $stmt->bindValue(7, $status, SQLITE3_INTEGER);
+            
         } else if ($channel_type === 'custom') {
             // 添加自定义渠道 - 存储在domains表中
             $stmt = $db->prepare("
@@ -185,6 +245,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_channel'])) {
             $stmt = $db->prepare("DELETE FROM cloudflare_accounts WHERE id = ?");
         } else if ($channel_type === 'rainbow') {
             $stmt = $db->prepare("DELETE FROM rainbow_accounts WHERE id = ?");
+        } else if ($channel_type === 'dnspod') {
+            $stmt = $db->prepare("DELETE FROM dnspod_accounts WHERE id = ?");
+        } else if ($channel_type === 'powerdns') {
+            $stmt = $db->prepare("DELETE FROM powerdns_accounts WHERE id = ?");
         } else if ($channel_type === 'custom') {
             $stmt = $db->prepare("DELETE FROM domains WHERE id = ? AND provider_type = 'custom'");
         }
@@ -261,6 +325,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_channel'])) {
                 $stmt->bindValue(6, $description, SQLITE3_TEXT);
                 $stmt->bindValue(7, $channel_id, SQLITE3_INTEGER);
             }
+        } else if ($channel_type === 'dnspod') {
+            // 更新DNSPod渠道
+            if (!empty($api_key) && !empty($provider_uid)) {
+                $stmt = $db->prepare("UPDATE dnspod_accounts SET name = ?, account_name = ?, secret_id = ?, secret_key = ?, description = ? WHERE id = ?");
+                $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
+                $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
+                $stmt->bindValue(3, $api_key, SQLITE3_TEXT);
+                $stmt->bindValue(4, $provider_uid, SQLITE3_TEXT);
+                $stmt->bindValue(5, $description, SQLITE3_TEXT);
+                $stmt->bindValue(6, $channel_id, SQLITE3_INTEGER);
+            } else {
+                $stmt = $db->prepare("UPDATE dnspod_accounts SET name = ?, account_name = ?, description = ? WHERE id = ?");
+                $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
+                $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
+                $stmt->bindValue(3, $description, SQLITE3_TEXT);
+                $stmt->bindValue(4, $channel_id, SQLITE3_INTEGER);
+            }
+        } else if ($channel_type === 'powerdns') {
+            // 更新PowerDNS渠道
+            if (!empty($api_key) && !empty($api_base_url)) {
+                $stmt = $db->prepare("UPDATE powerdns_accounts SET name = ?, account_name = ?, api_url = ?, api_key = ?, server_id = ?, description = ? WHERE id = ?");
+                $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
+                $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
+                $stmt->bindValue(3, $api_base_url, SQLITE3_TEXT);
+                $stmt->bindValue(4, $api_key, SQLITE3_TEXT);
+                $stmt->bindValue(5, $provider_uid ?: 'localhost', SQLITE3_TEXT);
+                $stmt->bindValue(6, $description, SQLITE3_TEXT);
+                $stmt->bindValue(7, $channel_id, SQLITE3_INTEGER);
+            } else {
+                $stmt = $db->prepare("UPDATE powerdns_accounts SET name = ?, account_name = ?, api_url = ?, server_id = ?, description = ? WHERE id = ?");
+                $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
+                $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
+                $stmt->bindValue(3, $api_base_url, SQLITE3_TEXT);
+                $stmt->bindValue(4, $provider_uid ?: 'localhost', SQLITE3_TEXT);
+                $stmt->bindValue(5, $description, SQLITE3_TEXT);
+                $stmt->bindValue(6, $channel_id, SQLITE3_INTEGER);
+            }
         } else if ($channel_type === 'custom') {
             if (!empty($api_key)) {
                 $stmt = $db->prepare("UPDATE domains SET domain_name = ?, email = ?, api_key = ?, zone_id = ?, api_base_url = ?, provider_uid = ? WHERE id = ? AND provider_type = 'custom'");
@@ -307,6 +408,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_status'])) {
             $stmt = $db->prepare("UPDATE cloudflare_accounts SET status = ? WHERE id = ?");
         } else if ($channel_type === 'rainbow') {
             $stmt = $db->prepare("UPDATE rainbow_accounts SET status = ? WHERE id = ?");
+        } else if ($channel_type === 'dnspod') {
+            $stmt = $db->prepare("UPDATE dnspod_accounts SET status = ? WHERE id = ?");
+        } else if ($channel_type === 'powerdns') {
+            $stmt = $db->prepare("UPDATE powerdns_accounts SET status = ? WHERE id = ?");
         } else if ($channel_type === 'custom') {
             $stmt = $db->prepare("UPDATE domains SET status = ? WHERE id = ? AND provider_type = 'custom'");
         }
@@ -343,6 +448,18 @@ while ($row = $rainbow_result->fetchArray(SQLITE3_ASSOC)) {
     $channels[] = $row;
 }
 
+// 获取DNSPod渠道
+$dnspod_result = $db->query("SELECT id, COALESCE(NULLIF(account_name, ''), name) as name, secret_id as api_key, secret_key as provider_uid, description, status, created_at, 'dnspod' as type FROM dnspod_accounts ORDER BY created_at DESC");
+while ($row = $dnspod_result->fetchArray(SQLITE3_ASSOC)) {
+    $channels[] = $row;
+}
+
+// 获取PowerDNS渠道
+$powerdns_result = $db->query("SELECT id, COALESCE(NULLIF(account_name, ''), name) as name, api_key, api_url as api_base_url, server_id as provider_uid, description, status, created_at, 'powerdns' as type FROM powerdns_accounts ORDER BY created_at DESC");
+while ($row = $powerdns_result->fetchArray(SQLITE3_ASSOC)) {
+    $channels[] = $row;
+}
+
 // 获取自定义渠道
 $custom_result = $db->query("SELECT id, domain_name as name, api_key, email, zone_id, api_base_url, provider_uid, status, created_at, 'custom' as type FROM domains WHERE provider_type = 'custom' ORDER BY created_at DESC");
 while ($row = $custom_result->fetchArray(SQLITE3_ASSOC)) {
@@ -360,6 +477,8 @@ $stats = [
     'active_channels' => count(array_filter($channels, function($c) { return $c['status'] == 1; })),
     'cloudflare_count' => count(array_filter($channels, function($c) { return $c['type'] == 'cloudflare'; })),
     'rainbow_count' => count(array_filter($channels, function($c) { return $c['type'] == 'rainbow'; })),
+    'dnspod_count' => count(array_filter($channels, function($c) { return $c['type'] == 'dnspod'; })),
+    'powerdns_count' => count(array_filter($channels, function($c) { return $c['type'] == 'powerdns'; })),
     'custom_count' => count(array_filter($channels, function($c) { return $c['type'] == 'custom'; }))
 ];
 
@@ -503,7 +622,9 @@ include 'includes/header.php';
                                                 <?php
                                                 $type_configs = [
                                                     'cloudflare' => ['label' => 'Cloudflare', 'class' => 'info', 'icon' => 'fab fa-cloudflare'],
-                                                    'rainbow' => ['label' => '彩虹DNS', 'class' => 'warning', 'icon' => 'fas fa-rainbow']
+                                                    'rainbow' => ['label' => '彩虹DNS', 'class' => 'warning', 'icon' => 'fas fa-rainbow'],
+                                                    'dnspod' => ['label' => 'DNSPod', 'class' => 'success', 'icon' => 'fas fa-cloud'],
+                                                    'powerdns' => ['label' => 'PowerDNS', 'class' => 'primary', 'icon' => 'fas fa-server']
                                                 ];
                                                 $config = $type_configs[$channel['type']];
                                                 ?>
@@ -583,6 +704,8 @@ include 'includes/header.php';
                                     <option value="">请选择渠道类型</option>
                                     <option value="cloudflare">Cloudflare</option>
                                     <option value="rainbow">彩虹DNS</option>
+                                    <option value="dnspod">DNSPod</option>
+                                    <option value="powerdns">PowerDNS</option>
                                 </select>
                             </div>
                         </div>
@@ -619,18 +742,59 @@ include 'includes/header.php';
                         </div>
                     </div>
                     
-                    <!-- 彩虹DNS和自定义API特有字段 -->
-                    <div class="row" id="provider_fields" style="display: none;">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="api_base_url" class="form-label">API基础URL <span id="api_base_url_required" style="color: red;">*</span></label>
-                                <input type="url" class="form-control" id="api_base_url" name="api_base_url">
+                    <!-- 彩虹DNS特有字段 -->
+                    <div id="rainbow_fields" style="display: none;">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="api_base_url" class="form-label">API基础URL <span style="color: red;">*</span></label>
+                                    <input type="url" class="form-control" id="api_base_url" name="api_base_url" placeholder="例如: https://api.rainbow.com/dns">
+                                    <div class="form-text">请输入彩虹DNS服务的完整API基础URL地址</div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="provider_uid" class="form-label">用户ID <span id="provider_uid_required" style="color: red;">*</span></label>
-                                <input type="text" class="form-control" id="provider_uid" name="provider_uid">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="provider_uid" class="form-label">用户ID <span style="color: red;">*</span></label>
+                                    <input type="text" class="form-control" id="provider_uid" name="provider_uid" placeholder="请输入您的彩虹DNS用户ID">
+                                    <div class="form-text">您可以在彩虹DNS控制面板的账户信息中找到用户ID</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- DNSPod特有字段 -->
+                    <div id="dnspod_fields" style="display: none;">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="dnspod_secret_key" class="form-label">SecretKey <span style="color: red;">*</span></label>
+                                    <input type="password" class="form-control" id="dnspod_secret_key" name="provider_uid" placeholder="请输入DNSPod SecretKey">
+                                    <div class="form-text">请在腾讯云DNSPod控制台获取SecretKey</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- PowerDNS特有字段 -->
+                    <div id="powerdns_fields" style="display: none;">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="powerdns_api_url" class="form-label">API URL <span style="color: red;">*</span></label>
+                                    <input type="url" class="form-control" id="powerdns_api_url" name="api_base_url" placeholder="例如: http://powerdns.example.com:8081">
+                                    <div class="form-text">请输入PowerDNS API服务器完整URL地址</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="powerdns_server_id" class="form-label">服务器ID (可选)</label>
+                                    <input type="text" class="form-control" id="powerdns_server_id" name="provider_uid" placeholder="localhost" value="localhost">
+                                    <div class="form-text">PowerDNS服务器标识符，通常为localhost</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -697,17 +861,59 @@ include 'includes/header.php';
                         <input type="text" class="form-control" id="edit_zone_id" name="zone_id">
                     </div>
                     
-                    <div class="row" id="edit_provider_fields" style="display: none;">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="edit_api_base_url" class="form-label">API基础URL</label>
-                                <input type="url" class="form-control" id="edit_api_base_url" name="api_base_url">
+                    <!-- 彩虹DNS编辑字段 -->
+                    <div id="edit_rainbow_fields" style="display: none;">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="edit_api_base_url" class="form-label">API基础URL <span style="color: red;">*</span></label>
+                                    <input type="url" class="form-control" id="edit_api_base_url" name="api_base_url" placeholder="例如: https://api.rainbow.com/dns">
+                                    <div class="form-text">请输入彩虹DNS服务的完整API基础URL地址</div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="edit_provider_uid" class="form-label">用户ID</label>
-                                <input type="text" class="form-control" id="edit_provider_uid" name="provider_uid">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="edit_provider_uid" class="form-label">用户ID <span style="color: red;">*</span></label>
+                                    <input type="text" class="form-control" id="edit_provider_uid" name="provider_uid" placeholder="请输入您的彩虹DNS用户ID">
+                                    <div class="form-text">您可以在彩虹DNS控制面板的账户信息中找到用户ID</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- DNSPod编辑字段 -->
+                    <div id="edit_dnspod_fields" style="display: none;">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="edit_dnspod_secret_key" class="form-label">SecretKey</label>
+                                    <input type="password" class="form-control" id="edit_dnspod_secret_key" name="provider_uid" placeholder="不修改请留空">
+                                    <div class="form-text">请在腾讯云DNSPod控制台获取SecretKey</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- PowerDNS编辑字段 -->
+                    <div id="edit_powerdns_fields" style="display: none;">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="edit_powerdns_api_url" class="form-label">API URL</label>
+                                    <input type="url" class="form-control" id="edit_powerdns_api_url" name="api_base_url" placeholder="例如: http://powerdns.example.com:8081">
+                                    <div class="form-text">请输入PowerDNS API服务器完整URL地址</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="edit_powerdns_server_id" class="form-label">服务器ID</label>
+                                    <input type="text" class="form-control" id="edit_powerdns_server_id" name="provider_uid" placeholder="localhost">
+                                    <div class="form-text">PowerDNS服务器标识符，通常为localhost</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -730,43 +936,48 @@ include 'includes/header.php';
 function toggleFields() {
     const channelType = document.getElementById('channel_type').value;
     const zoneIdRow = document.getElementById('zone_id_row');
-    const providerFields = document.getElementById('provider_fields');
+    const rainbowFields = document.getElementById('rainbow_fields');
+    const dnspodFields = document.getElementById('dnspod_fields');
+    const powerdnsFields = document.getElementById('powerdns_fields');
     const emailField = document.getElementById('email_field');
     const emailInput = document.getElementById('email');
-    const apiBaseUrlInput = document.getElementById('api_base_url');
-    const providerUidInput = document.getElementById('provider_uid');
-    const apiBaseUrlRequired = document.getElementById('api_base_url_required');
-    const providerUidRequired = document.getElementById('provider_uid_required');
+    const apiKeyLabel = document.querySelector('label[for="api_key"]');
     
     // 隐藏所有特殊字段
     zoneIdRow.style.display = 'none';
-    providerFields.style.display = 'none';
+    rainbowFields.style.display = 'none';
+    dnspodFields.style.display = 'none';
+    powerdnsFields.style.display = 'none';
     
-    // 重置字段要求
+    // 重置基础字段
     emailInput.required = true;
     emailField.style.display = 'block';
-    apiBaseUrlInput.required = false;
-    providerUidInput.required = false;
-    apiBaseUrlRequired.style.display = 'none';
-    providerUidRequired.style.display = 'none';
+    apiKeyLabel.textContent = 'API密钥 *';
     
     if (channelType === 'cloudflare') {
-        // Cloudflare需要邮箱
+        // Cloudflare需要邮箱和API密钥
         emailInput.required = true;
         emailField.style.display = 'block';
     } else if (channelType === 'rainbow') {
-        // 彩虹DNS不需要邮箱，但需要API基础URL和用户ID
+        // 彩虹DNS不需要邮箱，需要API基础URL和用户ID
         emailInput.required = false;
         emailField.style.display = 'none';
-        providerFields.style.display = 'block';
-        apiBaseUrlInput.required = true;
-        providerUidInput.required = true;
-        apiBaseUrlRequired.style.display = 'inline';
-        providerUidRequired.style.display = 'inline';
+        rainbowFields.style.display = 'block';
+    } else if (channelType === 'dnspod') {
+        // DNSPod不需要邮箱，需要SecretId和SecretKey
+        emailInput.required = false;
+        emailField.style.display = 'none';
+        dnspodFields.style.display = 'block';
+        apiKeyLabel.textContent = 'SecretId *';
+    } else if (channelType === 'powerdns') {
+        // PowerDNS不需要邮箱，需要API URL和API密钥
+        emailInput.required = false;
+        emailField.style.display = 'none';
+        powerdnsFields.style.display = 'block';
     } else if (channelType === 'custom') {
         // 自定义API需要所有字段
         zoneIdRow.style.display = 'block';
-        providerFields.style.display = 'block';
+        rainbowFields.style.display = 'block';
         emailInput.required = true;
         emailField.style.display = 'block';
     }
@@ -782,15 +993,21 @@ function editChannel(channel) {
     
     // 根据渠道类型显示/隐藏字段
     const editZoneIdField = document.getElementById('edit_zone_id_field');
-    const editProviderFields = document.getElementById('edit_provider_fields');
+    const editRainbowFields = document.getElementById('edit_rainbow_fields');
+    const editDnspodFields = document.getElementById('edit_dnspod_fields');
+    const editPowerdnsFields = document.getElementById('edit_powerdns_fields');
     const editEmailField = document.getElementById('edit_email_field');
     const editEmailInput = document.getElementById('edit_email');
+    const editApiKeyLabel = document.querySelector('label[for="edit_api_key"]');
     
     // 重置所有字段显示状态
     editZoneIdField.style.display = 'none';
-    editProviderFields.style.display = 'none';
+    editRainbowFields.style.display = 'none';
+    editDnspodFields.style.display = 'none';
+    editPowerdnsFields.style.display = 'none';
     editEmailField.style.display = 'block';
     editEmailInput.required = true;
+    editApiKeyLabel.textContent = 'API密钥';
     
     if (channel.type === 'cloudflare') {
         // Cloudflare需要邮箱
@@ -800,13 +1017,27 @@ function editChannel(channel) {
         // 彩虹DNS不需要邮箱
         editEmailField.style.display = 'none';
         editEmailInput.required = false;
-        editProviderFields.style.display = 'block';
+        editRainbowFields.style.display = 'block';
         document.getElementById('edit_api_base_url').value = channel.api_base_url || '';
         document.getElementById('edit_provider_uid').value = channel.provider_uid || '';
+    } else if (channel.type === 'dnspod') {
+        // DNSPod不需要邮箱
+        editEmailField.style.display = 'none';
+        editEmailInput.required = false;
+        editDnspodFields.style.display = 'block';
+        editApiKeyLabel.textContent = 'SecretId';
+        document.getElementById('edit_dnspod_secret_key').value = ''; // 不显示现有密钥
+    } else if (channel.type === 'powerdns') {
+        // PowerDNS不需要邮箱
+        editEmailField.style.display = 'none';
+        editEmailInput.required = false;
+        editPowerdnsFields.style.display = 'block';
+        document.getElementById('edit_powerdns_api_url').value = channel.api_base_url || '';
+        document.getElementById('edit_powerdns_server_id').value = channel.provider_uid || 'localhost';
     } else if (channel.type === 'custom') {
         // 自定义API需要所有字段
         editZoneIdField.style.display = 'block';
-        editProviderFields.style.display = 'block';
+        editRainbowFields.style.display = 'block';
         editEmailField.style.display = 'block';
         editEmailInput.required = true;
         document.getElementById('edit_zone_id').value = channel.zone_id || '';
