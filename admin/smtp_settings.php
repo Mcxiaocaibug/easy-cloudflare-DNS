@@ -128,13 +128,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['test_email'])) {
         showError('请输入有效的邮箱地址');
     } else {
         try {
+            // 检查SMTP是否启用
+            $smtp_enabled = $db->querySingle("SELECT setting_value FROM settings WHERE setting_key = 'smtp_enabled'");
+            if (!$smtp_enabled || $smtp_enabled !== '1') {
+                throw new Exception('SMTP邮件发送功能未启用，请先在设置中启用SMTP');
+            }
+            
+            // 检查必要的SMTP配置
+            $required_settings = ['smtp_host', 'smtp_port', 'smtp_username', 'smtp_password'];
+            $missing_settings = [];
+            
+            foreach ($required_settings as $setting) {
+                $value = $db->querySingle("SELECT setting_value FROM settings WHERE setting_key = '$setting'");
+                if (empty($value)) {
+                    $missing_settings[] = $setting;
+                }
+            }
+            
+            if (!empty($missing_settings)) {
+                throw new Exception('SMTP配置不完整，缺少：' . implode(', ', $missing_settings) . '。请先完善SMTP配置。');
+            }
+            
             $emailService = new EmailService();
             
             // 发送测试邮件
-            $emailService->sendTestEmail($test_email);
-            showSuccess('测试邮件发送成功！请检查邮箱');
+            $result = $emailService->sendTestEmail($test_email);
+            
+            if ($result) {
+                showSuccess('测试邮件发送成功！请检查邮箱（包括垃圾邮件文件夹）');
+                logAction('admin', $_SESSION['admin_id'], 'send_test_email', "发送测试邮件到: $test_email");
+            } else {
+                throw new Exception('邮件发送返回失败，但未抛出异常');
+            }
+            
         } catch (Exception $e) {
-            showError('测试邮件发送失败：' . $e->getMessage());
+            $error_message = '测试邮件发送失败：' . $e->getMessage();
+            showError($error_message);
+            
+            // 记录详细错误信息到日志
+            error_log("SMTP Test Email Failed: " . $e->getMessage());
+            error_log("SMTP Test Email Stack Trace: " . $e->getTraceAsString());
+            
+            // 记录到操作日志
+            logAction('admin', $_SESSION['admin_id'], 'send_test_email_failed', "测试邮件发送失败: " . $e->getMessage());
         }
     }
     
