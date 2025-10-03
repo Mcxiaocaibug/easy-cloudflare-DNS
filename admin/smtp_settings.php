@@ -258,9 +258,9 @@ include 'includes/header.php';
                 </h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
                     <div class="btn-group me-2">
-                        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#testEmailModal">
+                        <!-- <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#testEmailModal">
                             <i class="fas fa-paper-plane me-1"></i>发送测试邮件
-                        </button>
+                        </button> -->
                         <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#templateModal">
                             <i class="fas fa-edit me-1"></i>邮件模板
                         </button>
@@ -427,7 +427,9 @@ include 'includes/header.php';
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">发送测试邮件</h5>
+                <h5 class="modal-title">
+                    <i class="fas fa-paper-plane me-2"></i>发送测试邮件
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST">
@@ -437,9 +439,46 @@ include 'includes/header.php';
                         <input type="email" class="form-control" id="test_email" name="test_email" required>
                         <div class="form-text">将向此邮箱发送测试邮件以验证SMTP配置</div>
                     </div>
+                    
+                    <!-- 当前SMTP配置状态 -->
                     <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        测试邮件将使用当前保存的SMTP设置发送，请确保已保存最新配置。
+                        <h6 class="alert-heading">
+                            <i class="fas fa-info-circle me-2"></i>当前SMTP配置状态
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small>
+                                    <strong>服务器:</strong> <?php echo htmlspecialchars($current_settings['smtp_host'] ?? '未配置'); ?><br>
+                                    <strong>端口:</strong> <?php echo htmlspecialchars($current_settings['smtp_port'] ?? '未配置'); ?><br>
+                                    <strong>加密:</strong> <?php echo strtoupper($current_settings['smtp_secure'] ?? '未配置'); ?>
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <small>
+                                    <strong>用户名:</strong> <?php echo htmlspecialchars($current_settings['smtp_username'] ?? '未配置'); ?><br>
+                                    <strong>状态:</strong> 
+                                    <?php if (($current_settings['smtp_enabled'] ?? '0') === '1'): ?>
+                                        <span class="text-success">已启用</span>
+                                    <?php else: ?>
+                                        <span class="text-danger">未启用</span>
+                                    <?php endif; ?>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 常见问题提示 -->
+                    <div class="alert alert-warning">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-exclamation-triangle me-2"></i>常见问题排查
+                        </h6>
+                        <ul class="mb-0 small">
+                            <li>确保SMTP服务已启用并保存配置</li>
+                            <li>检查邮箱服务商是否支持SMTP（如QQ邮箱需要开启SMTP服务）</li>
+                            <li>确认使用的是授权码而不是登录密码</li>
+                            <li>检查防火墙是否阻止了SMTP端口连接</li>
+                            <li>如果使用Gmail，需要开启"两步验证"并生成"应用专用密码"</li>
+                        </ul>
                     </div>
                 </div>
                 <div class="modal-footer">

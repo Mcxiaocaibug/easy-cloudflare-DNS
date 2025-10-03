@@ -462,6 +462,22 @@ class EmailService {
      */
     public function sendTestEmail($email) {
         try {
+            // 检查SMTP是否启用
+            if ($this->smtp_enabled !== '1') {
+                throw new Exception('SMTP邮件发送功能未启用');
+            }
+            
+            // 检查必要的配置
+            if (empty($this->smtp_host)) {
+                throw new Exception('SMTP服务器地址未配置');
+            }
+            if (empty($this->smtp_username)) {
+                throw new Exception('SMTP用户名未配置');
+            }
+            if (empty($this->smtp_password)) {
+                throw new Exception('SMTP密码未配置');
+            }
+            
             $this->mail->clearAddresses();
             $this->mail->addAddress($email);
             $this->mail->Subject = '六趣DNS - SMTP测试邮件';
@@ -469,10 +485,29 @@ class EmailService {
             $this->mail->Body = $this->getTestEmailTemplate();
             $this->mail->AltBody = "这是一封SMTP配置测试邮件，发送时间：" . date('Y-m-d H:i:s');
             
-            $this->mail->send();
+            // 发送邮件
+            $result = $this->mail->send();
+            
+            if (!$result) {
+                throw new Exception('PHPMailer发送失败，但未抛出异常');
+            }
+            
             return true;
             
         } catch (Exception $e) {
+            // 记录详细的错误信息
+            $error_details = [
+                'message' => $e->getMessage(),
+                'smtp_host' => $this->smtp_host,
+                'smtp_port' => $this->smtp_port,
+                'smtp_username' => $this->smtp_username,
+                'smtp_secure' => $this->smtp_secure,
+                'smtp_enabled' => $this->smtp_enabled,
+                'debug_level' => $this->smtp_debug
+            ];
+            
+            error_log("SMTP Test Email Error Details: " . json_encode($error_details));
+            
             throw new Exception("测试邮件发送失败: " . $e->getMessage());
         }
     }
