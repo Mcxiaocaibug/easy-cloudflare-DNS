@@ -49,6 +49,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'user_groups.php' ? 'active' : ''; ?>" href="user_groups.php">
+                    <i class="fas fa-users-cog me-2"></i>用户组管理
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'card_keys.php' ? 'active' : ''; ?>" href="card_keys.php">
                     <i class="fas fa-credit-card me-2"></i>卡密管理
                 </a>

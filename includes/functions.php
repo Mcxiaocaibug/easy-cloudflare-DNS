@@ -345,3 +345,70 @@ function getBlockedPrefixes() {
     
     return $prefixes;
 }
+
+/**
+ * 获取用户组信息
+ * @param int $user_id 用户ID
+ * @return array|null 用户组信息
+ */
+function getUserGroup($user_id) {
+    require_once __DIR__ . '/user_groups.php';
+    $manager = new UserGroupManager();
+    return $manager->getUserGroup($user_id);
+}
+
+/**
+ * 检查用户是否有权限访问指定域名
+ * @param int $user_id 用户ID
+ * @param int $domain_id 域名ID
+ * @return bool
+ */
+function checkUserDomainPermission($user_id, $domain_id) {
+    require_once __DIR__ . '/user_groups.php';
+    $manager = new UserGroupManager();
+    return $manager->checkDomainPermission($user_id, $domain_id);
+}
+
+/**
+ * 获取用户可访问的域名列表
+ * @param int $user_id 用户ID
+ * @return array 域名数组
+ */
+function getUserAccessibleDomains($user_id) {
+    require_once __DIR__ . '/user_groups.php';
+    $manager = new UserGroupManager();
+    return $manager->getAccessibleDomains($user_id);
+}
+
+/**
+ * 获取用户添加记录所需积分
+ * @param int $user_id 用户ID
+ * @return int 所需积分数
+ */
+function getRequiredPoints($user_id) {
+    require_once __DIR__ . '/user_groups.php';
+    $manager = new UserGroupManager();
+    return $manager->getRequiredPoints($user_id);
+}
+
+/**
+ * 检查用户是否达到记录数量限制
+ * @param int $user_id 用户ID
+ * @return bool true=未达到限制，false=已达到限制
+ */
+function checkUserRecordLimit($user_id) {
+    require_once __DIR__ . '/user_groups.php';
+    $manager = new UserGroupManager();
+    return $manager->checkRecordLimit($user_id);
+}
+
+/**
+ * 获取用户当前记录数
+ * @param int $user_id 用户ID
+ * @return int 当前记录数
+ */
+function getUserCurrentRecordCount($user_id) {
+    require_once __DIR__ . '/user_groups.php';
+    $manager = new UserGroupManager();
+    return $manager->getCurrentRecordCount($user_id);
+}

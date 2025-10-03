@@ -270,6 +270,48 @@
             color: white;
         }
         
+        /* 下拉选择框选项样式 - 深色主题 */
+        .form-select option {
+            background: rgba(10, 14, 39, 0.95) !important;
+            color: #fff !important;
+            padding: 8px 12px;
+            text-shadow: none;
+        }
+        
+        .form-select option:hover,
+        .form-select option:checked {
+            background: rgba(0, 212, 255, 0.3) !important;
+            color: #fff !important;
+        }
+        
+        /* select 元素特殊样式 */
+        select.form-control,
+        select.form-select {
+            background: rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(10px);
+            color: #fff !important;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        select.form-control option,
+        select.form-select option {
+            background: rgba(10, 14, 39, 0.95) !important;
+            color: #fff !important;
+            padding: 10px;
+        }
+        
+        /* 输入组中的 select */
+        .input-group .form-select,
+        .input-group select {
+            background: rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        .input-group .form-select option,
+        .input-group select option {
+            background: rgba(10, 14, 39, 0.95) !important;
+            color: #fff !important;
+        }
+        
         /* 按钮毛玻璃效果 */
         .btn {
             backdrop-filter: blur(50px);

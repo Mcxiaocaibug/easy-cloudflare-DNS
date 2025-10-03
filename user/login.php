@@ -85,7 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     
                     $total_points = $default_points + $invitee_bonus;
                     
-                    $stmt = $db->prepare("INSERT INTO users (username, password, email, points) VALUES (?, ?, ?, ?)");
+                    // 新用户默认分配到默认组（ID=1）
+                    $stmt = $db->prepare("INSERT INTO users (username, password, email, points, group_id) VALUES (?, ?, ?, ?, 1)");
                     $stmt->bindValue(1, $username, SQLITE3_TEXT);
                     $stmt->bindValue(2, $hashed_password, SQLITE3_TEXT);
                     $stmt->bindValue(3, $email, SQLITE3_TEXT);

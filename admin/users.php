@@ -2,12 +2,14 @@
 session_start();
 require_once '../config/database.php';
 require_once '../includes/functions.php';
+require_once '../includes/user_groups.php';
 
 checkAdminLogin();
 
 $db = Database::getInstance()->getConnection();
 $action = getGet('action', 'list');
 $messages = getMessages();
+$groupManager = new UserGroupManager($db);
 
 // 处理积分操作（充值/扣除）
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['points_action'])) {
@@ -101,6 +103,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
             } else {
                 showError('密码修改失败！');
             }
+        }
+    } else {
+        showError('请填写完整信息！');
+    }
+    redirect('users.php');
+}
+
+// 处理修改用户组
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_user_group'])) {
+    $user_id = (int)getPost('user_id');
+    $new_group_id = (int)getPost('group_id');
+    
+    if ($user_id && $new_group_id) {
+        $user = $db->querySingle("SELECT username FROM users WHERE id = $user_id", true);
+        $group = $groupManager->getGroupById($new_group_id);
+        
+        if ($user && $group) {
+            if ($groupManager->changeUserGroup($user_id, $new_group_id, $_SESSION['admin_id'])) {
+                logAction('admin', $_SESSION['admin_id'], 'change_user_group', 
+                    "将用户 {$user['username']} 的组修改为 {$group['display_name']}");
+                showSuccess("用户组修改成功！现在属于 {$group['display_name']}");
+            } else {
+                showError('用户组修改失败！');
+            }
+        } else {
+            showError('用户或用户组不存在！');
         }
     } else {
         showError('请填写完整信息！');
@@ -247,6 +275,7 @@ include 'includes/header.php';
                                     <th>ID</th>
                                     <th>用户名</th>
                                     <th>邮箱</th>
+                                    <th>用户组</th>
                                     <th>注册方式</th>
                                     <th>积分</th>
                                     <th>DNS记录数</th>
@@ -269,6 +298,21 @@ include 'includes/header.php';
                                         <?php endif; ?>
                                     </td>
                                     <td><?php echo htmlspecialchars($user['email'] ?? '未设置'); ?></td>
+                                    <td>
+                                        <?php 
+                                        $user_group = $groupManager->getUserGroup($user['id']);
+                                        if ($user_group):
+                                            $badge_class = 'bg-secondary';
+                                            if ($user_group['group_name'] === 'vip') $badge_class = 'bg-info';
+                                            if ($user_group['group_name'] === 'svip') $badge_class = 'bg-warning text-dark';
+                                        ?>
+                                            <span class="badge <?php echo $badge_class; ?>" title="<?php echo htmlspecialchars($user_group['description']); ?>">
+                                                <i class="fas fa-user-tag"></i> <?php echo htmlspecialchars($user_group['display_name']); ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary">未分组</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td>
                                         <?php if (!empty($user['oauth_provider']) && $user['oauth_provider'] === 'github'): ?>
                                             <span class="badge bg-dark">
@@ -315,6 +359,11 @@ include 'includes/header.php';
                                                     onclick="showPasswordModal(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['username']); ?>')"
                                                     title="修改密码">
                                                 <i class="fas fa-key"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-info" 
+                                                    onclick="showGroupModal(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['username']); ?>', <?php echo $user_group ? $user_group['id'] : 1; ?>)"
+                                                    title="修改用户组">
+                                                <i class="fas fa-users-cog"></i>
                                             </button>
                                             <?php if (!empty($user['github_username'])): ?>
                                             <a href="?action=revoke_github&id=<?php echo $user['id']; ?>" 
@@ -461,6 +510,47 @@ include 'includes/header.php';
     </div>
 </div>
 
+<!-- 修改用户组模态框 -->
+<div class="modal fade" id="groupModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">修改用户组</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <input type="hidden" id="group_user_id" name="user_id">
+                    <div class="mb-3">
+                        <label class="form-label">用户</label>
+                        <input type="text" class="form-control" id="group_username" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="group_id" class="form-label">用户组</label>
+                        <select class="form-select" id="group_id" name="group_id" required>
+                            <?php
+                            $all_groups = $groupManager->getAllGroups(true);
+                            foreach ($all_groups as $g):
+                            ?>
+                                <option value="<?php echo $g['id']; ?>">
+                                    <?php echo htmlspecialchars($g['display_name']); ?> 
+                                    (<?php echo $g['points_per_record']; ?>积分/条, 
+                                    <?php echo $g['max_records'] == -1 ? '无限制' : $g['max_records'] . '条'; ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">选择新的用户组</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" name="change_user_group" class="btn btn-primary">确认修改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function showPointsModal(userId, username, currentPoints) {
     document.getElementById('points_user_id').value = userId;
@@ -485,6 +575,13 @@ function showPasswordModal(userId, username) {
     document.getElementById('new_password').value = '';
     document.getElementById('confirm_password').value = '';
     new bootstrap.Modal(document.getElementById('passwordModal')).show();
+}
+
+function showGroupModal(userId, username, currentGroupId) {
+    document.getElementById('group_user_id').value = userId;
+    document.getElementById('group_username').value = username;
+    document.getElementById('group_id').value = currentGroupId;
+    new bootstrap.Modal(document.getElementById('groupModal')).show();
 }
 </script>
 

@@ -4,6 +4,7 @@ require_once '../config/database.php';
 require_once '../config/cloudflare.php';
 require_once '../config/dns_manager.php';
 require_once '../includes/functions.php';
+require_once '../includes/user_groups.php';
 
 checkUserLogin();
 
@@ -19,12 +20,13 @@ $auto_fill_mode = !empty($auto_prefix) && $auto_domain_id > 0;
 $user_points = $db->querySingle("SELECT points FROM users WHERE id = {$_SESSION['user_id']}");
 $_SESSION['user_points'] = $user_points;
 
-// 获取可用域名
-$domains = [];
-$result = $db->query("SELECT * FROM domains WHERE status = 1 ORDER BY domain_name");
-while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-    $domains[] = $row;
-}
+// 获取用户组信息
+$user_group = getUserGroup($_SESSION['user_id']);
+$required_points = getRequiredPoints($_SESSION['user_id']);
+$current_record_count = getUserCurrentRecordCount($_SESSION['user_id']);
+
+// 获取用户可访问的域名（根据用户组权限）
+$domains = getUserAccessibleDomains($_SESSION['user_id']);
 
 // 处理域名选择
 $selected_domain_id = $_SESSION['selected_domain_id'] ?? ($domains[0]['id'] ?? null);
@@ -70,8 +72,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
         showError('请填写完整信息！');
     } elseif (!isDNSTypeEnabled($type)) {
         showError('该DNS记录类型未启用！');
-    } elseif ($user_points < getSetting('points_per_record', 1)) {
-        showError('积分不足，无法添加DNS记录！');
+    } elseif (!checkUserDomainPermission($_SESSION['user_id'], $current_domain['id'])) {
+        showError('您的用户组无权访问此域名！请联系管理员升级用户组。');
+    } elseif (!checkUserRecordLimit($_SESSION['user_id'])) {
+        $max = $user_group['max_records'];
+        showError("您已达到用户组的最大记录数限制（{$max}条）！请联系管理员升级用户组。");
+    } elseif ($user_points < $required_points) {
+        showError("积分不足！需要 {$required_points} 积分，您当前有 {$user_points} 积分。");
     } elseif (isSubdomainBlocked($subdomain)) {
         showError("前缀 \"$subdomain\" 已被系统拦截，无法创建此子域名！");
     } else {
@@ -155,10 +162,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             $stmt->bindValue(8, $remark, SQLITE3_TEXT);
             
             if ($stmt->execute()) {
-                // 扣除积分
-                $points_cost = getSetting('points_per_record', 1);
-                $db->exec("UPDATE users SET points = points - $points_cost WHERE id = {$_SESSION['user_id']}");
-                $_SESSION['user_points'] -= $points_cost;
+                // 扣除积分（根据用户组策略）
+                $points_cost = $required_points;
+                if ($points_cost > 0) {
+                    $db->exec("UPDATE users SET points = points - $points_cost WHERE id = {$_SESSION['user_id']}");
+                    $_SESSION['user_points'] -= $points_cost;
+                }
                 
                 logAction('user', $_SESSION['user_id'], 'add_dns_record', "添加DNS记录: $full_name ($type)");
                 showSuccess('DNS记录添加成功！');
@@ -299,8 +308,20 @@ include 'includes/header.php';
                     <?php endif; ?>
                 </div>
                 <div class="btn-toolbar mb-2 mb-md-0">
+                    <?php if ($user_group): 
+                        $badge_class = 'bg-secondary';
+                        if ($user_group['group_name'] === 'vip') $badge_class = 'bg-info';
+                        if ($user_group['group_name'] === 'svip') $badge_class = 'bg-warning text-dark';
+                    ?>
+                    <span class="badge <?php echo $badge_class; ?> fs-6 me-2" title="<?php echo htmlspecialchars($user_group['description']); ?>">
+                        <i class="fas fa-user-tag me-1"></i><?php echo htmlspecialchars($user_group['display_name']); ?>
+                    </span>
+                    <?php endif; ?>
                     <span class="badge bg-primary fs-6 me-2">
                         <i class="fas fa-coins me-1"></i>积分: <?php echo $_SESSION['user_points']; ?>
+                    </span>
+                    <span class="badge bg-success fs-6 me-2">
+                        <i class="fas fa-list me-1"></i>记录: <?php echo $current_record_count; ?><?php if ($user_group && $user_group['max_records'] != -1): ?>/<?php echo $user_group['max_records']; ?><?php endif; ?>
                     </span>
                     <?php if ($current_domain): ?>
                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRecordModal" 
@@ -457,10 +478,22 @@ include 'includes/header.php';
             </div>
             <form method="POST">
                 <div class="modal-body">
+                    <?php if ($user_group): ?>
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        添加一条DNS记录需要消耗 <?php echo getSetting('points_per_record', 1); ?> 积分
+                        您的用户组：<strong><?php echo htmlspecialchars($user_group['display_name']); ?></strong> | 
+                        <?php if ($required_points > 0): ?>
+                            添加一条DNS记录需要消耗 <strong><?php echo $required_points; ?></strong> 积分
+                        <?php else: ?>
+                            <strong class="text-success">免费添加</strong> DNS记录
+                        <?php endif; ?>
+                        <?php if ($user_group['max_records'] != -1): ?>
+                            | 已用 <strong><?php echo $current_record_count; ?>/<?php echo $user_group['max_records']; ?></strong> 条
+                        <?php else: ?>
+                            | 已用 <strong><?php echo $current_record_count; ?></strong> 条（无限制）
+                        <?php endif; ?>
                     </div>
+                    <?php endif; ?>
                     <div class="mb-3">
                         <label for="subdomain" class="form-label">子域名</label>
                         <div class="input-group">
@@ -1154,6 +1187,54 @@ function checkAndUpdateConflict() {
     }
 }
 </script>
+
+<style>
+/* 修复域名选择下拉框样式 - 深色主题适配 */
+#domain_id {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#domain_id option {
+    background-color: rgba(10, 14, 39, 0.95) !important;
+    color: #fff !important;
+    padding: 8px 12px;
+}
+
+#domain_id option:hover {
+    background-color: rgba(0, 212, 255, 0.2) !important;
+}
+
+/* 修复其他表单元素的深色主题 */
+.form-select {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.form-select option {
+    background-color: rgba(10, 14, 39, 0.95);
+    color: #fff;
+}
+
+.form-control {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.form-control:focus {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25);
+}
+
+.form-control::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+</style>
 
 <!-- 公告弹窗模态框 -->
 <?php if (!empty($user_announcements)): ?>

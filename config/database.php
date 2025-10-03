@@ -275,6 +275,9 @@ class Database {
         
         // 插入默认DNS记录类型
         $this->insertDefaultDNSTypes();
+        
+        // 初始化用户组表（如果不存在则创建）
+        $this->initUserGroupTables();
     }
     
     
@@ -357,6 +360,109 @@ class Database {
             
         } catch (Exception $e) {
             // 忽略错误，字段可能已存在
+        }
+    }
+    
+    /**
+     * 初始化用户组相关表
+     * 在 initTables() 方法中调用
+     */
+    private function initUserGroupTables() {
+        // 1. 创建用户组表
+        $this->db->exec("CREATE TABLE IF NOT EXISTS user_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_name TEXT NOT NULL UNIQUE,
+            display_name TEXT NOT NULL,
+            points_per_record INTEGER DEFAULT 1,
+            description TEXT DEFAULT '',
+            is_active INTEGER DEFAULT 1,
+            can_access_all_domains INTEGER DEFAULT 0,
+            max_records INTEGER DEFAULT -1,
+            priority INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        // 2. 创建用户组域名权限表
+        $this->db->exec("CREATE TABLE IF NOT EXISTS user_group_domains (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            domain_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (group_id) REFERENCES user_groups(id) ON DELETE CASCADE,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
+            UNIQUE(group_id, domain_id)
+        )");
+        
+        // 3. 检查并添加 users 表的 group_id 字段
+        try {
+            $columns = $this->db->query("PRAGMA table_info(users)");
+            $has_group_id = false;
+            
+            if ($columns) {
+                while ($column = $columns->fetchArray(SQLITE3_ASSOC)) {
+                    if ($column['name'] === 'group_id') {
+                        $has_group_id = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!$has_group_id) {
+                $this->db->exec("ALTER TABLE users ADD COLUMN group_id INTEGER DEFAULT 1");
+                $this->db->exec("ALTER TABLE users ADD COLUMN group_changed_at TIMESTAMP DEFAULT NULL");
+                $this->db->exec("ALTER TABLE users ADD COLUMN group_changed_by INTEGER DEFAULT NULL");
+            }
+        } catch (Exception $e) {
+            // 忽略错误，字段可能已存在
+        }
+        
+        // 4. 插入默认用户组数据
+        $this->insertDefaultUserGroups();
+        
+        // 5. 创建索引
+        try {
+            $this->db->exec("CREATE INDEX IF NOT EXISTS idx_users_group_id ON users(group_id)");
+            $this->db->exec("CREATE INDEX IF NOT EXISTS idx_user_group_domains_group ON user_group_domains(group_id)");
+            $this->db->exec("CREATE INDEX IF NOT EXISTS idx_user_group_domains_domain ON user_group_domains(domain_id)");
+        } catch (Exception $e) {
+            // 忽略索引创建错误
+        }
+    }
+    
+    /**
+     * 插入默认用户组数据
+     */
+    private function insertDefaultUserGroups() {
+        $default_groups = [
+            ['default', '默认组', 1, '普通用户，基础权限', 0, 0, 100],
+            ['vip', 'VIP组', 1, 'VIP用户，享受更多域名权限', 10, 0, 500],
+            ['svip', 'SVIP组', 0, '超级VIP用户，免积分解析，全域名权限', 20, 1, -1]
+        ];
+        
+        foreach ($default_groups as $group) {
+            try {
+                // 检查是否已存在
+                $exists = $this->db->querySingle("SELECT COUNT(*) FROM user_groups WHERE group_name = '{$group[0]}'");
+                if (!$exists) {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO user_groups 
+                        (group_name, display_name, points_per_record, description, priority, can_access_all_domains, max_records) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $stmt->bindValue(1, $group[0], SQLITE3_TEXT);
+                    $stmt->bindValue(2, $group[1], SQLITE3_TEXT);
+                    $stmt->bindValue(3, $group[2], SQLITE3_INTEGER);
+                    $stmt->bindValue(4, $group[3], SQLITE3_TEXT);
+                    $stmt->bindValue(5, $group[4], SQLITE3_INTEGER);
+                    $stmt->bindValue(6, $group[5], SQLITE3_INTEGER);
+                    $stmt->bindValue(7, $group[6], SQLITE3_INTEGER);
+                    $stmt->execute();
+                }
+            } catch (Exception $e) {
+                // 忽略插入错误
+                error_log("插入默认用户组失败: " . $e->getMessage());
+            }
         }
     }
 }

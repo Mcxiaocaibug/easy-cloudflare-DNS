@@ -657,6 +657,16 @@ function showToast(message, type = 'info') {
 </script>
 
 <style>
+/* 统计卡片毛玻璃效果 */
+.border-left-primary,
+.border-left-success,
+.border-left-warning,
+.border-left-info {
+    background: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
 .border-left-primary {
     border-left: 0.25rem solid #4e73df !important;
 }
@@ -670,14 +680,123 @@ function showToast(message, type = 'info') {
     border-left: 0.25rem solid #36b9cc !important;
 }
 
+/* 我的邀请码卡片 - 毛玻璃效果 */
+.card.shadow {
+    background: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+.card.shadow .card-header {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.card.shadow .card-body {
+    background: transparent !important;
+}
+
+/* 邀请码信息内部卡片 - 毛玻璃效果 */
+.card.bg-light {
+    background: rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #fff !important;
+}
+
+.card.bg-light .card-body {
+    background: transparent !important;
+}
+
+.card.bg-light .card-title {
+    color: #00d4ff !important;
+}
+
+/* 统计卡片内文字颜色 */
+.card .text-gray-800 {
+    color: #fff !important;
+}
+
+.card .text-muted {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* 卡片标题颜色优化 */
+.card-header .text-primary {
+    color: #00d4ff !important;
+}
+
+.text-xs {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* 图标颜色 */
+.text-gray-300 {
+    color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* 输入框深色主题 */
+.card .form-control {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.card .form-control:focus {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: #00d4ff !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 212, 255, 0.25) !important;
+}
+
+/* 标签文字颜色 */
+.card .form-label {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* 按钮样式优化 */
+.card .btn-outline-secondary,
+.card .btn-outline-primary {
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: #fff !important;
+}
+
+.card .btn-outline-secondary:hover,
+.card .btn-outline-primary:hover {
+    background: rgba(0, 212, 255, 0.2) !important;
+    border-color: #00d4ff !important;
+}
+
+/* 徽章样式 */
+.card .badge {
+    backdrop-filter: blur(5px);
+}
+
+/* 边框分隔线 */
+.card .border-end {
+    border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* 提示信息毛玻璃效果 */
+.alert-info {
+    background: rgba(23, 162, 184, 0.15) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(23, 162, 184, 0.3) !important;
+    color: #fff !important;
+}
+
+.alert-info strong {
+    color: #00d4ff !important;
+}
+
 .invitation-code {
-    background-color: #f8f9fa;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px);
     padding: 6px 10px;
     border-radius: 6px;
     font-family: 'Courier New', monospace;
     font-weight: bold;
-    color: #495057;
-    border: 1px solid #dee2e6;
+    color: #00d4ff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     transition: all 0.2s ease;
     user-select: all;
     min-width: 120px;
@@ -685,11 +804,11 @@ function showToast(message, type = 'info') {
 }
 
 .invitation-code:hover {
-    background-color: #e9ecef;
-    border-color: #007bff;
+    background: rgba(0, 212, 255, 0.15);
+    border-color: #00d4ff;
     cursor: pointer;
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,123,255,0.15);
+    box-shadow: 0 2px 8px rgba(0, 212, 255, 0.3);
 }
 
 .invitation-code:active {
