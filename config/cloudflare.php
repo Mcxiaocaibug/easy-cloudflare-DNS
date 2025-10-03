@@ -51,10 +51,12 @@ class CloudflareAPI {
         
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_errno = curl_errno($ch);
+        $curl_error = curl_error($ch);  // 在关闭前获取错误信息
         curl_close($ch);
         
-        if ($response === false) {
-            throw new Exception('Curl error: ' . curl_error($ch));
+        if ($response === false || $curl_errno) {
+            throw new Exception('网络请求失败 (错误代码: ' . $curl_errno . '): ' . $curl_error);
         }
         
         $decoded = json_decode($response, true);

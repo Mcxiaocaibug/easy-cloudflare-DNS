@@ -128,6 +128,15 @@ function initializeChannelTables($db) {
 
 // 处理添加渠道
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])) {
+    // 开启详细日志记录
+    $log_file = __DIR__ . '/../data/channel_add_debug.log';
+    $log_data = [
+        'time' => date('Y-m-d H:i:s'),
+        'post_data' => $_POST,
+        'session_id' => session_id()
+    ];
+    file_put_contents($log_file, json_encode($log_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n", FILE_APPEND);
+    
     $channel_type = trim($_POST['channel_type']);
     $channel_name = trim($_POST['channel_name']);
     $api_key = trim($_POST['api_key']);
@@ -137,6 +146,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])) {
     $provider_uid = trim($_POST['provider_uid']);
     $status = isset($_POST['status']) ? 1 : 0;
     $description = trim($_POST['description']);
+    
+    file_put_contents($log_file, "开始处理 {$channel_type} 渠道添加\n", FILE_APPEND);
     
     try {
         if ($channel_type === 'cloudflare') {
@@ -154,9 +165,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])) {
             
         } else if ($channel_type === 'rainbow') {
             // 添加彩虹DNS渠道 - 验证必需字段
-            if (empty($api_base_url) || empty($provider_uid)) {
-                throw new Exception('彩虹DNS需要填写API基础URL和用户ID');
+            file_put_contents($log_file, "彩虹DNS验证开始\n", FILE_APPEND);
+            file_put_contents($log_file, "api_base_url: {$api_base_url}\n", FILE_APPEND);
+            file_put_contents($log_file, "provider_uid: {$provider_uid}\n", FILE_APPEND);
+            file_put_contents($log_file, "api_key: " . substr($api_key, 0, 10) . "...\n", FILE_APPEND);
+            
+            if (empty($api_base_url) || empty($provider_uid) || empty($api_key)) {
+                file_put_contents($log_file, "字段验证失败\n", FILE_APPEND);
+                throw new Exception('彩虹DNS需要填写API密钥、API基础URL和用户ID');
             }
+            
+            // 验证彩虹DNS API
+            file_put_contents($log_file, "开始API验证\n", FILE_APPEND);
+            require_once __DIR__ . '/../config/rainbow_dns.php';
+            $rainbow_api = new RainbowDNSAPI($provider_uid, $api_key, $api_base_url);
+            
+            $verify_result = $rainbow_api->verifyCredentials();
+            file_put_contents($log_file, "API验证结果: " . ($verify_result ? '成功' : '失败') . "\n", FILE_APPEND);
+            
+            if (!$verify_result) {
+                $details = $rainbow_api->getVerificationDetails();
+                file_put_contents($log_file, "验证详情: " . json_encode($details, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
+                throw new Exception('彩虹DNS API验证失败: ' . ($details['error_message'] ?? '未知错误'));
+            }
+            
+            file_put_contents($log_file, "API验证通过，准备插入数据库\n", FILE_APPEND);
             
             $stmt = $db->prepare("
                 INSERT INTO rainbow_accounts (name, account_name, api_key, email, api_base_url, provider_uid, description, status, created_at) 
@@ -221,15 +254,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])) {
             $stmt->bindValue(7, $status, SQLITE3_INTEGER);
         }
         
-        if ($stmt->execute()) {
+        if (isset($stmt) && $stmt->execute()) {
+            // 记录操作日志
+            $channel_id = $db->lastInsertRowID();
+            file_put_contents($log_file, "数据库插入成功，ID: {$channel_id}\n", FILE_APPEND);
+            
+            if (function_exists('logAction')) {
+                logAction('admin', $_SESSION['admin_id'] ?? 0, 'add_channel', "添加{$channel_type}渠道: {$channel_name}");
+            }
             showSuccess(ucfirst($channel_type) . ' 渠道添加成功！');
+            file_put_contents($log_file, "成功消息已设置\n", FILE_APPEND);
         } else {
-            showError('渠道添加失败');
+            $error_info = $db->lastErrorMsg();
+            file_put_contents($log_file, "数据库插入失败: {$error_info}\n", FILE_APPEND);
+            showError('渠道添加失败: ' . $error_info);
         }
         
     } catch (Exception $e) {
+        file_put_contents($log_file, "异常捕获: " . $e->getMessage() . "\n", FILE_APPEND);
+        file_put_contents($log_file, "异常跟踪: " . $e->getTraceAsString() . "\n", FILE_APPEND);
         showError('添加失败：' . $e->getMessage());
     }
+    
+    file_put_contents($log_file, "准备重定向\n", FILE_APPEND);
+    file_put_contents($log_file, "Session消息: " . json_encode($_SESSION, JSON_UNESCAPED_UNICODE) . "\n\n", FILE_APPEND);
     
     header("Location: channels_management.php");
     exit;
@@ -694,7 +742,7 @@ include 'includes/header.php';
                 <h5 class="modal-title">添加新渠道</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" id="addChannelForm" onsubmit="return validateChannelForm()">
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6">
@@ -721,7 +769,7 @@ include 'includes/header.php';
                         <div class="col-md-6" id="email_field">
                             <div class="mb-3">
                                 <label for="email" class="form-label">邮箱 *</label>
-                                <input type="email" class="form-control" id="email" name="email" required>
+                                <input type="email" class="form-control" id="email" name="email">
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -747,18 +795,32 @@ include 'includes/header.php';
                         <div class="row">
                             <div class="col-12">
                                 <div class="mb-3">
-                                    <label for="api_base_url" class="form-label">API基础URL <span style="color: red;">*</span></label>
-                                    <input type="url" class="form-control" id="api_base_url" name="api_base_url" placeholder="例如: https://api.rainbow.com/dns">
-                                    <div class="form-text">请输入彩虹DNS服务的完整API基础URL地址</div>
+                                <label for="api_base_url" class="form-label">
+                                    <i class="fas fa-exclamation-circle text-danger"></i>
+                                    API基础URL <span style="color: red;">*</span>
+                                </label>
+                                <input type="url" class="form-control" id="api_base_url" name="api_base_url" 
+                                       placeholder="https://caihong.6qu.cc" 
+                                       style="border: 2px solid #ffc107;">
+                                <div class="form-text text-warning">
+                                    <strong>必填！</strong>请输入彩虹DNS服务的完整API基础URL地址，例如：https://caihong.6qu.cc
+                                </div>
                                 </div>
                             </div>
                         </div>
                         <div class="row">
                             <div class="col-12">
                                 <div class="mb-3">
-                                    <label for="provider_uid" class="form-label">用户ID <span style="color: red;">*</span></label>
-                                    <input type="text" class="form-control" id="provider_uid" name="provider_uid" placeholder="请输入您的彩虹DNS用户ID">
-                                    <div class="form-text">您可以在彩虹DNS控制面板的账户信息中找到用户ID</div>
+                                <label for="provider_uid" class="form-label">
+                                    <i class="fas fa-exclamation-circle text-danger"></i>
+                                    用户ID <span style="color: red;">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="provider_uid" name="provider_uid" 
+                                       placeholder="例如：1000" 
+                                       style="border: 2px solid #ffc107;">
+                                <div class="form-text text-warning">
+                                    <strong>必填！</strong>请输入您的彩虹DNS用户ID（数字），例如：1000，不要填写"localhost"
+                                </div>
                                 </div>
                             </div>
                         </div>
@@ -846,7 +908,7 @@ include 'includes/header.php';
                         <div class="col-md-6" id="edit_email_field">
                             <div class="mb-3">
                                 <label for="edit_email" class="form-label">邮箱 *</label>
-                                <input type="email" class="form-control" id="edit_email" name="email" required>
+                                <input type="email" class="form-control" id="edit_email" name="email">
                             </div>
                         </div>
                     </div>
@@ -933,6 +995,54 @@ include 'includes/header.php';
 </div>
 
 <script>
+// 禁用一个容器内的所有input/select/textarea
+function disableFields(container) {
+    if (!container) return;
+    const inputs = container.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        input.disabled = true;
+    });
+}
+
+// 启用一个容器内的所有input/select/textarea
+function enableFields(container) {
+    if (!container) return;
+    const inputs = container.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        input.disabled = false;
+    });
+}
+
+// 表单验证函数
+function validateChannelForm() {
+    const channelType = document.getElementById('channel_type').value;
+    const apiBaseUrl = document.getElementById('api_base_url').value.trim();
+    const providerUid = document.getElementById('provider_uid').value.trim();
+    const apiKey = document.getElementById('api_key').value.trim();
+    
+    console.log('验证表单:', {channelType, apiBaseUrl, providerUid, apiKey});
+    
+    if (channelType === 'rainbow') {
+        if (!apiBaseUrl) {
+            alert('彩虹DNS需要填写API基础URL！\n例如：https://caihong.6qu.cc');
+            document.getElementById('api_base_url').focus();
+            return false;
+        }
+        if (!providerUid || providerUid === 'localhost') {
+            alert('彩虹DNS需要填写用户ID！\n不能是"localhost"，应该是您的彩虹DNS用户ID，例如：1000');
+            document.getElementById('provider_uid').focus();
+            return false;
+        }
+        if (!apiKey) {
+            alert('彩虹DNS需要填写API密钥！');
+            document.getElementById('api_key').focus();
+            return false;
+        }
+    }
+    
+    return true;
+}
+
 function toggleFields() {
     const channelType = document.getElementById('channel_type').value;
     const zoneIdRow = document.getElementById('zone_id_row');
@@ -942,43 +1052,76 @@ function toggleFields() {
     const emailField = document.getElementById('email_field');
     const emailInput = document.getElementById('email');
     const apiKeyLabel = document.querySelector('label[for="api_key"]');
+    const apiBaseUrlInput = document.getElementById('api_base_url');
+    const providerUidInput = document.getElementById('provider_uid');
     
-    // 隐藏所有特殊字段
+    // 隐藏所有特殊字段，并禁用它们（防止提交）
     zoneIdRow.style.display = 'none';
     rainbowFields.style.display = 'none';
     dnspodFields.style.display = 'none';
     powerdnsFields.style.display = 'none';
     
+    // 禁用所有隐藏字段，防止它们被提交
+    disableFields(rainbowFields);
+    disableFields(dnspodFields);
+    disableFields(powerdnsFields);
+    
+    // 重置所有可选字段的required属性
+    if (apiBaseUrlInput) apiBaseUrlInput.removeAttribute('required');
+    if (providerUidInput) providerUidInput.removeAttribute('required');
+    
     // 重置基础字段
-    emailInput.required = true;
+    emailInput.setAttribute('required', 'required');
     emailField.style.display = 'block';
     apiKeyLabel.textContent = 'API密钥 *';
     
     if (channelType === 'cloudflare') {
         // Cloudflare需要邮箱和API密钥
-        emailInput.required = true;
+        emailInput.setAttribute('required', 'required');
         emailField.style.display = 'block';
     } else if (channelType === 'rainbow') {
         // 彩虹DNS不需要邮箱，需要API基础URL和用户ID
-        emailInput.required = false;
+        emailInput.removeAttribute('required');
+        emailInput.value = '';  // 清空值避免验证
         emailField.style.display = 'none';
         rainbowFields.style.display = 'block';
+        // 启用彩虹DNS字段
+        enableFields(rainbowFields);
+        // 设置彩虹DNS必填字段
+        if (apiBaseUrlInput) {
+            apiBaseUrlInput.setAttribute('required', 'required');
+            apiBaseUrlInput.value = '';  // 清空以防有旧值
+        }
+        if (providerUidInput) {
+            providerUidInput.setAttribute('required', 'required');
+            providerUidInput.value = '';  // 清空以防有旧值
+        }
     } else if (channelType === 'dnspod') {
         // DNSPod不需要邮箱，需要SecretId和SecretKey
-        emailInput.required = false;
+        emailInput.removeAttribute('required');
+        emailInput.value = '';  // 清空值避免验证
         emailField.style.display = 'none';
         dnspodFields.style.display = 'block';
+        enableFields(dnspodFields);
         apiKeyLabel.textContent = 'SecretId *';
+        // DNSPod的SecretKey通过provider_uid字段
+        const dnspodSecretKey = document.getElementById('dnspod_secret_key');
+        if (dnspodSecretKey) dnspodSecretKey.setAttribute('required', 'required');
     } else if (channelType === 'powerdns') {
         // PowerDNS不需要邮箱，需要API URL和API密钥
-        emailInput.required = false;
+        emailInput.removeAttribute('required');
+        emailInput.value = '';  // 清空值避免验证
         emailField.style.display = 'none';
         powerdnsFields.style.display = 'block';
+        enableFields(powerdnsFields);
+        // PowerDNS的API URL是必填的
+        const powerdnsApiUrl = document.getElementById('powerdns_api_url');
+        if (powerdnsApiUrl) powerdnsApiUrl.setAttribute('required', 'required');
     } else if (channelType === 'custom') {
         // 自定义API需要所有字段
         zoneIdRow.style.display = 'block';
         rainbowFields.style.display = 'block';
-        emailInput.required = true;
+        emailInput.setAttribute('required', 'required');
         emailField.style.display = 'block';
     }
 }
@@ -1006,31 +1149,31 @@ function editChannel(channel) {
     editDnspodFields.style.display = 'none';
     editPowerdnsFields.style.display = 'none';
     editEmailField.style.display = 'block';
-    editEmailInput.required = true;
+    editEmailInput.setAttribute('required', 'required');
     editApiKeyLabel.textContent = 'API密钥';
     
     if (channel.type === 'cloudflare') {
         // Cloudflare需要邮箱
         editEmailField.style.display = 'block';
-        editEmailInput.required = true;
+        editEmailInput.setAttribute('required', 'required');
     } else if (channel.type === 'rainbow') {
         // 彩虹DNS不需要邮箱
         editEmailField.style.display = 'none';
-        editEmailInput.required = false;
+        editEmailInput.removeAttribute('required');
         editRainbowFields.style.display = 'block';
         document.getElementById('edit_api_base_url').value = channel.api_base_url || '';
         document.getElementById('edit_provider_uid').value = channel.provider_uid || '';
     } else if (channel.type === 'dnspod') {
         // DNSPod不需要邮箱
         editEmailField.style.display = 'none';
-        editEmailInput.required = false;
+        editEmailInput.removeAttribute('required');
         editDnspodFields.style.display = 'block';
         editApiKeyLabel.textContent = 'SecretId';
         document.getElementById('edit_dnspod_secret_key').value = ''; // 不显示现有密钥
     } else if (channel.type === 'powerdns') {
         // PowerDNS不需要邮箱
         editEmailField.style.display = 'none';
-        editEmailInput.required = false;
+        editEmailInput.removeAttribute('required');
         editPowerdnsFields.style.display = 'block';
         document.getElementById('edit_powerdns_api_url').value = channel.api_base_url || '';
         document.getElementById('edit_powerdns_server_id').value = channel.provider_uid || 'localhost';
@@ -1039,7 +1182,7 @@ function editChannel(channel) {
         editZoneIdField.style.display = 'block';
         editRainbowFields.style.display = 'block';
         editEmailField.style.display = 'block';
-        editEmailInput.required = true;
+        editEmailInput.setAttribute('required', 'required');
         document.getElementById('edit_zone_id').value = channel.zone_id || '';
         document.getElementById('edit_api_base_url').value = channel.api_base_url || '';
         document.getElementById('edit_provider_uid').value = channel.provider_uid || '';

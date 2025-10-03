@@ -42,27 +42,45 @@ class RainbowDNSAPI {
         curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/x-www-form-urlencoded'
         ]);
         
+        // SSL配置 - 如果是HTTPS请求
+        if (strpos($url, 'https://') === 0) {
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);  // 开发环境可以关闭，生产环境建议开启
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        }
+        
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_errno = curl_errno($ch);
+        $curl_error = curl_error($ch);  // 在关闭前获取错误信息
         curl_close($ch);
         
-        if ($response === false) {
-            throw new Exception('Curl error: ' . curl_error($ch));
+        if ($response === false || $curl_errno) {
+            throw new Exception('网络请求失败 (错误代码: ' . $curl_errno . '): ' . $curl_error);
         }
         
         $decoded = json_decode($response, true);
         
         if ($http_code >= 400) {
-            throw new Exception('HTTP Error: ' . $http_code);
+            $error_msg = 'HTTP错误 ' . $http_code;
+            if ($decoded && isset($decoded['msg'])) {
+                $error_msg .= ': ' . $decoded['msg'];
+            }
+            throw new Exception($error_msg);
+        }
+        
+        // 检查JSON解析是否成功
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('API响应解析失败: ' . json_last_error_msg() . '，原始响应: ' . substr($response, 0, 200));
         }
         
         // 检查API返回的错误
         if (isset($decoded['code']) && $decoded['code'] != 0) {
-            throw new Exception('Rainbow DNS API Error: ' . ($decoded['msg'] ?? 'Unknown error'));
+            throw new Exception('彩虹DNS API错误: ' . ($decoded['msg'] ?? '未知错误'));
         }
         
         return $decoded;
