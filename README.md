@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://img.shields.io/badge/PHP-7.4+-blue.svg" alt="PHP Version">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/License-Non--Commercial-red.svg" alt="License">
   <img src="https://img.shields.io/badge/Database-SQLite3-orange.svg" alt="Database">
   <img src="https://img.shields.io/badge/Framework-Bootstrap%205-purple.svg" alt="Frontend">
   <img src="https://img.shields.io/badge/Status-Active-brightgreen.svg" alt="Status">
@@ -566,15 +566,26 @@ git checkout -b feature/your-feature-name
 
 <div align="center">
 
-本项目采用 [MIT License](LICENSE) 开源协议，允许自由使用、修改和分发。
+本项目采用 **非商业许可证**，禁止商业用途。
 
 | 协议条款 | 说明 |
 |---------|------|
-| **✅ 商业使用** | 允许在商业项目中使用 |
+| **❌ 商业使用** | **禁止**在商业项目中使用 |
 | **✅ 修改** | 允许修改源代码 |
 | **✅ 分发** | 允许分发和传播 |
 | **✅ 私人使用** | 允许私人使用 |
+| **✅ 学习研究** | 允许学习和研究用途 |
 | **📝 许可证和版权声明** | 必须包含原始许可证和版权声明 |
+
+### ⚠️ 重要声明
+
+**本项目仅供学习和研究使用，禁止任何形式的商业用途！**
+
+- 🚫 **禁止商用**：不得用于任何商业项目
+- 🚫 **禁止盈利**：不得通过本项目获取商业利益
+- 🚫 **禁止销售**：不得将本项目作为商品销售
+- ✅ **允许学习**：可以用于学习和技术研究
+- ✅ **允许修改**：可以修改源代码用于学习
 
 </div>
 
