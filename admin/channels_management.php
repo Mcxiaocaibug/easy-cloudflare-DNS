@@ -800,10 +800,10 @@ include 'includes/header.php';
                                     API基础URL <span style="color: red;">*</span>
                                 </label>
                                 <input type="url" class="form-control" id="api_base_url" name="api_base_url" 
-                                       placeholder="https://caihong.6qu.cc" 
+                                       placeholder="https://6qu.cc" 
                                        style="border: 2px solid #ffc107;">
                                 <div class="form-text text-warning">
-                                    <strong>必填！</strong>请输入彩虹DNS服务的完整API基础URL地址，例如：https://caihong.6qu.cc
+                                    <strong>必填！</strong>请输入彩虹DNS服务的完整API基础URL地址，例如：https://6qu.cc
                                 </div>
                                 </div>
                             </div>
