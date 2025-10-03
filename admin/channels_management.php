@@ -819,7 +819,7 @@ include 'includes/header.php';
                                        placeholder="例如：1000" 
                                        style="border: 2px solid #ffc107;">
                                 <div class="form-text text-warning">
-                                    <strong>必填！</strong>请输入您的彩虹DNS用户ID（数字），例如：1000，不要填写"localhost"
+                                    <strong>必填！</strong>请输入您的彩虹DNS用户ID（数字）"
                                 </div>
                                 </div>
                             </div>
