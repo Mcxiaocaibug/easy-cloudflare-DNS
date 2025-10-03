@@ -132,7 +132,7 @@ include 'includes/header.php';
                         <small class="text-muted">• 可以编辑和删除 • 消耗用户积分 • 用户可管理</small>
                     </div>
                     <div class="col-md-6">
-                        <p class="mb-1"><span class="badge bg-info"><i class="fas fa-server me-1"></i>系统记录</span> - 通过批量同步导入的DNS记录</p>
+                        <p class="mb-1"><span class="badge bg-info"><i class="fas fa-server me-1"></i>系统记录</span> - 系统导入的DNS记录</p>
                         <small class="text-muted">• 只读，不可编辑 • 不消耗积分 • 管理员专属</small>
                     </div>
                 </div>

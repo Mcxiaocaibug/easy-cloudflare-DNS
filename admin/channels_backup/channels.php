@@ -296,12 +296,6 @@ include 'includes/header.php';
                                 <span>管理域名</span>
                             </a>
                         </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="batch_sync.php" class="btn btn-outline-info w-100 h-100 d-flex flex-column justify-content-center align-items-center">
-                                <i class="fas fa-sync-alt fa-2x mb-2"></i>
-                                <span>批量同步</span>
-                            </a>
-                        </div>
                     </div>
                 </div>
             </div>

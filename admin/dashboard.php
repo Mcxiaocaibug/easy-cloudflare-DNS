@@ -582,9 +582,6 @@ include 'includes/header.php';
                                     </a>
                                 </div>
                                 <div class="col-md-3">
-                                    <a href="batch_sync.php" class="btn btn-outline-info w-100">
-                                        <i class="fas fa-sync-alt me-2"></i>批量同步
-                                    </a>
                                 </div>
                                 <div class="col-md-3">
                                     <a href="card_keys.php" class="btn btn-outline-secondary w-100">

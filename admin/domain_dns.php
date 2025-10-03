@@ -179,45 +179,7 @@ if ($action === 'delete' && getGet('record_id')) {
     redirect("domain_dns.php?domain_id=$domain_id");
 }
 
-// 处理同步DNS记录
-if ($action === 'sync') {
-    try {
-        // 从Cloudflare获取所有DNS记录
-        $cf_records = $cf->getDNSRecords($domain['zone_id']);
-        
-        // 清空本地记录（只清空该域名的记录）
-        $db->exec("DELETE FROM dns_records WHERE domain_id = $domain_id");
-        
-        // 重新插入记录
-        $synced_count = 0;
-        foreach ($cf_records as $record) {
-            // 提取子域名
-            $subdomain = str_replace('.' . $domain['domain_name'], '', $record['name']);
-            if ($subdomain === $domain['domain_name']) {
-                $subdomain = '@';
-            }
-            
-            $stmt = $db->prepare("INSERT INTO dns_records (user_id, domain_id, subdomain, type, content, proxied, cloudflare_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->bindValue(1, 0, SQLITE3_INTEGER);
-            $stmt->bindValue(2, $domain_id, SQLITE3_INTEGER);
-            $stmt->bindValue(3, $subdomain, SQLITE3_TEXT);
-            $stmt->bindValue(4, $record['type'], SQLITE3_TEXT);
-            $stmt->bindValue(5, $record['content'], SQLITE3_TEXT);
-            $stmt->bindValue(6, $record['proxied'] ? 1 : 0, SQLITE3_INTEGER);
-            $stmt->bindValue(7, $record['id'], SQLITE3_TEXT);
-            
-            if ($stmt->execute()) {
-                $synced_count++;
-            }
-        }
-        
-        logAction('admin', $_SESSION['admin_id'], 'sync_dns_records', "同步域名 {$domain['domain_name']} 的DNS记录，共同步 $synced_count 条记录");
-        showSuccess("DNS记录同步成功！共同步 $synced_count 条记录。");
-    } catch (Exception $e) {
-        showError('同步DNS记录失败: ' . $e->getMessage());
-    }
-    redirect("domain_dns.php?domain_id=$domain_id");
-}
+// 同步DNS功能已移除
 
 // 获取DNS记录列表
 $dns_records = [];
@@ -243,9 +205,6 @@ include 'includes/header.php';
                     <?php echo htmlspecialchars($domain['domain_name']); ?> - DNS记录管理
                 </h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
-                    <button type="button" class="btn btn-success me-2" onclick="location.href='?domain_id=<?php echo $domain_id; ?>&action=sync'">
-                        <i class="fas fa-sync me-1"></i>同步记录
-                    </button>
                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRecordModal">
                         <i class="fas fa-plus me-1"></i>添加记录
                     </button>

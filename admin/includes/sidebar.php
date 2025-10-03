@@ -36,11 +36,6 @@
                     <i class="fas fa-list me-2"></i>DNS记录
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'batch_sync.php' ? 'active' : ''; ?>" href="batch_sync.php">
-                    <i class="fas fa-sync-alt me-2"></i>批量同步
-                </a>
-            </li>
             
             <!-- 用户与权限管理区 -->
             <li class="nav-item mt-3">
