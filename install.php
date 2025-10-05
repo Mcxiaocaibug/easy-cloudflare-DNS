@@ -86,6 +86,17 @@ $step = isset($_GET['step']) ? (int)$_GET['step'] : 1;
 $error = '';
 $success = '';
 
+// 在完成页自动删除安装文件（尽量不影响当前请求的输出）
+if ($step === 6) {
+    $thisFile = __FILE__;
+    if (is_file($thisFile)) {
+        // 优先尝试删除，失败则尝试重命名
+        if (!@unlink($thisFile)) {
+            @rename($thisFile, $thisFile . '.bak');
+        }
+    }
+}
+
 // 环境变量自动安装（容器/无交互场景）
 if (getenv('AUTO_INSTALL') === '1' || getenv('INSTALL_AUTO') === '1') {
     try {

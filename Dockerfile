@@ -3,7 +3,9 @@ FROM php:8.2-apache
 # Install system deps and PHP extensions
 RUN apt-get update && apt-get install -y \
         libzip-dev libpng-dev libonig-dev libxml2-dev git unzip \
-    && docker-php-ext-install pdo_mysql \
+        libjpeg62-turbo-dev libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo_mysql gd \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure Apache
