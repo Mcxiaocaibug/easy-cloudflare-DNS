@@ -11,7 +11,7 @@ $messages = getMessages();
 // 检查是否需要迁移
 function needsMigration($db) {
     $columns = [];
-    $result = $db->query("PRAGMA table_info(invitations)");
+    $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'invitations'");
     while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
         $columns[] = $row['name'];
     }

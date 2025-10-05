@@ -260,7 +260,7 @@ if ($action === 'toggle_status' && isset($_GET['id'])) {
     }
     
     try {
-        $stmt = $db->prepare("UPDATE user_groups SET is_active = 1 - is_active, updated_at = datetime('now') WHERE id = ?");
+        $stmt = $db->prepare("UPDATE user_groups SET is_active = 1 - is_active, updated_at = NOW() WHERE id = ?");
         $stmt->bindValue(1, $group_id, SQLITE3_INTEGER);
         
         if ($stmt->execute()) {

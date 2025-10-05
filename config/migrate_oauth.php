@@ -10,10 +10,8 @@ function migrateOAuthSupport() {
     
     // 检查users表是否已有OAuth字段
     $columns = [];
-    $result = $db->query("PRAGMA table_info(users)");
-    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-        $columns[] = $row['name'];
-    }
+    $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users'");
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $columns[] = $row['name']; }
     
     // 添加OAuth相关字段
     if (!in_array('github_id', $columns)) {
@@ -36,9 +34,16 @@ function migrateOAuthSupport() {
         $db->exec("ALTER TABLE users ADD COLUMN github_bonus_received INTEGER DEFAULT 0");
     }
     
-    // 创建OAuth用户索引
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)");
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_users_oauth_provider ON users(oauth_provider)");
+    // 创建OAuth用户索引（检查后创建）
+    try {
+        $pdo = $db->getPDO();
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'users' AND index_name = 'idx_users_github_id'");
+        $stmt->execute();
+        if (!(int)$stmt->fetchColumn()) { $pdo->exec("CREATE INDEX idx_users_github_id ON users(github_id)"); }
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'users' AND index_name = 'idx_users_oauth_provider'");
+        $stmt->execute();
+        if (!(int)$stmt->fetchColumn()) { $pdo->exec("CREATE INDEX idx_users_oauth_provider ON users(oauth_provider)"); }
+    } catch (Exception $e) {}
     
     // 添加GitHub OAuth设置到系统设置表
     $oauth_settings = [

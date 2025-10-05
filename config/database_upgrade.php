@@ -359,25 +359,15 @@ class DatabaseUpgrade {
     private function addIndexes() {
         echo "<p>创建数据库索引...</p>";
         
-        $indexes = [
-            'idx_users_github_id' => 'CREATE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)',
-            'idx_users_oauth_provider' => 'CREATE INDEX IF NOT EXISTS idx_users_oauth_provider ON users(oauth_provider)',
-            'idx_dns_records_user_id' => 'CREATE INDEX IF NOT EXISTS idx_dns_records_user_id ON dns_records(user_id)',
-            'idx_dns_records_domain_id' => 'CREATE INDEX IF NOT EXISTS idx_dns_records_domain_id ON dns_records(domain_id)',
-            'idx_invitations_inviter_id' => 'CREATE INDEX IF NOT EXISTS idx_invitations_inviter_id ON invitations(inviter_id)',
-            'idx_invitation_uses_invitation_id' => 'CREATE INDEX IF NOT EXISTS idx_invitation_uses_invitation_id ON invitation_uses(invitation_id)',
-            'idx_login_attempts_ip' => 'CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address)',
-            'idx_action_logs_user' => 'CREATE INDEX IF NOT EXISTS idx_action_logs_user ON action_logs(user_type, user_id)',
-            'idx_user_announcement_views_user' => 'CREATE INDEX IF NOT EXISTS idx_user_announcement_views_user ON user_announcement_views(user_id)'
-        ];
-        
-        foreach ($indexes as $name => $sql) {
-            try {
-                $this->db->exec($sql);
-            } catch (Exception $e) {
-                echo "<p style='color: orange;'>⚠️ 索引 $name 创建失败: " . $e->getMessage() . "</p>";
-            }
-        }
+        $this->ensureIndex('users', 'idx_users_github_id', 'github_id');
+        $this->ensureIndex('users', 'idx_users_oauth_provider', 'oauth_provider');
+        $this->ensureIndex('dns_records', 'idx_dns_records_user_id', 'user_id');
+        $this->ensureIndex('dns_records', 'idx_dns_records_domain_id', 'domain_id');
+        $this->ensureIndex('invitations', 'idx_invitations_inviter_id', 'inviter_id');
+        $this->ensureIndex('invitation_uses', 'idx_invitation_uses_invitation_id', 'invitation_id');
+        $this->ensureIndex('login_attempts', 'idx_login_attempts_ip', 'ip_address');
+        $this->ensureIndex('action_logs', 'idx_action_logs_user', 'user_type, user_id');
+        $this->ensureIndex('user_announcement_views', 'idx_user_announcement_views_user', 'user_id');
     }
     
     /**
@@ -387,13 +377,13 @@ class DatabaseUpgrade {
         echo "<p>添加缺失的字段...</p>";
         
         // 域名表字段
-        $this->addColumnIfNotExists('domains', 'account_id', 'TEXT');
-        $this->addColumnIfNotExists('domains', 'is_default', 'INTEGER DEFAULT 0');
+        $this->addColumnIfNotExists('domains', 'account_id', 'VARCHAR(255) DEFAULT ""');
+        $this->addColumnIfNotExists('domains', 'is_default', 'TINYINT(1) DEFAULT 0');
         
         // DNS记录表字段
-        $this->addColumnIfNotExists('dns_records', 'remark', 'TEXT DEFAULT \'\'');
-        $this->addColumnIfNotExists('dns_records', 'ttl', 'INTEGER DEFAULT 1');
-        $this->addColumnIfNotExists('dns_records', 'priority', 'INTEGER');
+        $this->addColumnIfNotExists('dns_records', 'remark', 'TEXT');
+        $this->addColumnIfNotExists('dns_records', 'ttl', 'INT DEFAULT 1');
+        $this->addColumnIfNotExists('dns_records', 'priority', 'INT NULL');
     }
     
     /**
@@ -401,12 +391,9 @@ class DatabaseUpgrade {
      */
     private function addColumnIfNotExists($table, $column, $definition) {
         $columns = [];
-        $result = $this->db->query("PRAGMA table_info($table)");
+        $result = $this->db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$table'");
         if ($result) {
-            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-                $columns[] = $row['name'];
-            }
-            
+            while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $columns[] = $row['name']; }
             if (!in_array($column, $columns)) {
                 try {
                     $this->db->exec("ALTER TABLE $table ADD COLUMN $column $definition");
@@ -495,10 +482,8 @@ class DatabaseUpgrade {
         ];
         
         $existing_tables = [];
-        $result = $this->db->query("SELECT name FROM sqlite_master WHERE type='table'");
-        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-            $existing_tables[] = $row['name'];
-        }
+        $result = $this->db->query("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE()");
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $existing_tables[] = $row['name']; }
         
         $missing_tables = array_diff($required_tables, $existing_tables);
         
@@ -520,10 +505,8 @@ class DatabaseUpgrade {
         foreach ($critical_fields as $table => $fields) {
             if (in_array($table, $existing_tables)) {
                 $table_columns = [];
-                $result = $this->db->query("PRAGMA table_info($table)");
-                while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-                    $table_columns[] = $row['name'];
-                }
+                $result = $this->db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$table'");
+                while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $table_columns[] = $row['name']; }
                 
                 $missing_fields = array_diff($fields, $table_columns);
                 if (empty($missing_fields)) {
@@ -537,6 +520,20 @@ class DatabaseUpgrade {
         echo "<p><strong>数据库升级完成！</strong></p>";
     }
 }
+
+    /** 确保索引存在 */
+    private function ensureIndex($table, $indexName, $columns) {
+        try {
+            $pdo = $this->db->getPDO();
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?");
+            $stmt->execute([$table, $indexName]);
+            if (!(int)$stmt->fetchColumn()) {
+                $pdo->exec("CREATE INDEX {$indexName} ON {$table} ({$columns})");
+            }
+        } catch (Exception $e) {
+            echo "<p style='color: orange;'>⚠️ 索引 {$indexName} 创建失败: " . $e->getMessage() . "</p>";
+        }
+    }
 
 // 执行升级
 if (basename($_SERVER['PHP_SELF']) === 'database_upgrade.php') {

@@ -51,10 +51,8 @@ function repairDatabase() {
         foreach ($criticalFields as $table => $fields) {
             if (in_array($table, $existingTables)) {
                 $tableColumns = [];
-                $result = $db->query("PRAGMA table_info($table)");
-                while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-                    $tableColumns[] = $row['name'];
-                }
+                $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$table' ORDER BY ORDINAL_POSITION");
+                while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $tableColumns[] = $row['name']; }
                 
                 $missingFields = array_diff($fields, $tableColumns);
                 if (!empty($missingFields)) {

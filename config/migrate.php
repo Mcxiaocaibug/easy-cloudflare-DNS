@@ -14,7 +14,7 @@ function migrateDatabase() {
     // 检查并添加缺失的列
     try {
         // 检查users表是否有status列
-        $result = $db->query("PRAGMA table_info(users)");
+        $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users'");
         $columns = [];
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
             $columns[] = $row['name'];
@@ -41,7 +41,7 @@ function migrateDatabase() {
         }
         
         // 检查domains表
-        $result = $db->query("PRAGMA table_info(domains)");
+        $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'domains'");
         $domain_columns = [];
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
             $domain_columns[] = $row['name'];
@@ -63,7 +63,7 @@ function migrateDatabase() {
         }
         
         // 检查dns_records表
-        $result = $db->query("PRAGMA table_info(dns_records)");
+        $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'dns_records'");
         $record_columns = [];
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
             $record_columns[] = $row['name'];
@@ -86,23 +86,23 @@ function migrateDatabase() {
         
         // 创建管理员表（如果不存在）
         $db->exec("CREATE TABLE IF NOT EXISTS admins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            email TEXT,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(191) NOT NULL UNIQUE,
+            password VARCHAR(255) NOT NULL,
+            email VARCHAR(255),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         
         
         // 创建系统设置表
         $db->exec("CREATE TABLE IF NOT EXISTS settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            setting_key TEXT NOT NULL UNIQUE,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            setting_key VARCHAR(191) NOT NULL UNIQUE,
             setting_value TEXT,
             description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         
         // 插入默认设置
         $default_settings = [
@@ -126,37 +126,37 @@ function migrateDatabase() {
         
         // 创建操作日志表
         $db->exec("CREATE TABLE IF NOT EXISTS action_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_type TEXT NOT NULL,
-            user_id INTEGER NOT NULL,
-            action TEXT NOT NULL,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_type VARCHAR(32) NOT NULL,
+            user_id INT NOT NULL,
+            action VARCHAR(191) NOT NULL,
             details TEXT,
-            ip_address TEXT,
+            ip_address VARCHAR(64),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         echo "✓ 创建操作日志表\n";
         
         // 创建Cloudflare账户表
         $db->exec("CREATE TABLE IF NOT EXISTS cloudflare_accounts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(191) NOT NULL,
+            email VARCHAR(255) NOT NULL,
             api_key TEXT NOT NULL,
-            status INTEGER DEFAULT 1,
+            status TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         echo "✓ 创建Cloudflare账户表\n";
         
         // 创建DNS记录类型表
         $db->exec("CREATE TABLE IF NOT EXISTS dns_record_types (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type_name TEXT NOT NULL UNIQUE,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            type_name VARCHAR(32) NOT NULL UNIQUE,
             description TEXT,
-            enabled INTEGER DEFAULT 1,
+            enabled TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         echo "✓ 创建DNS记录类型表\n";
         
         // 插入默认DNS记录类型

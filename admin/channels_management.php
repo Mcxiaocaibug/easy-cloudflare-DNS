@@ -22,35 +22,35 @@ function initializeChannelTables($db) {
     try {
         // 创建或确保 cloudflare_accounts 表存在
         $db->exec("CREATE TABLE IF NOT EXISTS cloudflare_accounts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL DEFAULT '',
-            email TEXT NOT NULL DEFAULT '',
-            api_key TEXT NOT NULL DEFAULT '',
-            status INTEGER DEFAULT 1,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(191) NOT NULL DEFAULT '',
+            email VARCHAR(255) NOT NULL DEFAULT '',
+            api_key TEXT NOT NULL,
+            status TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            account_name TEXT DEFAULT '',
-            description TEXT DEFAULT ''
-        )");
+            account_name VARCHAR(191) DEFAULT '',
+            description TEXT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         
         // 创建或确保 rainbow_accounts 表存在
         $db->exec("CREATE TABLE IF NOT EXISTS rainbow_accounts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL DEFAULT '',
-            provider_uid TEXT DEFAULT '',
-            api_key TEXT NOT NULL DEFAULT '',
-            api_base_url TEXT DEFAULT '',
-            status INTEGER DEFAULT 1,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(191) NOT NULL DEFAULT '',
+            provider_uid VARCHAR(191) DEFAULT '',
+            api_key TEXT NOT NULL,
+            api_base_url VARCHAR(255) DEFAULT '',
+            status TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            account_name TEXT DEFAULT '',
-            email TEXT DEFAULT '',
-            description TEXT DEFAULT ''
-        )");
+            account_name VARCHAR(191) DEFAULT '',
+            email VARCHAR(255) DEFAULT '',
+            description TEXT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         
         // 检查并添加缺失的字段到 cloudflare_accounts
         $cf_columns = [];
-        $result = $db->query("PRAGMA table_info(cloudflare_accounts)");
+        $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'cloudflare_accounts'");
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
             $cf_columns[] = $row['name'];
         }
@@ -64,7 +64,7 @@ function initializeChannelTables($db) {
         
         // 检查并添加缺失的字段到 rainbow_accounts
         $rainbow_columns = [];
-        $result = $db->query("PRAGMA table_info(rainbow_accounts)");
+        $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'rainbow_accounts'");
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
             $rainbow_columns[] = $row['name'];
         }
@@ -81,32 +81,32 @@ function initializeChannelTables($db) {
         
         // 创建或确保 dnspod_accounts 表存在
         $db->exec("CREATE TABLE IF NOT EXISTS dnspod_accounts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL DEFAULT '',
-            account_name TEXT DEFAULT '',
-            secret_id TEXT NOT NULL DEFAULT '',
-            secret_key TEXT NOT NULL DEFAULT '',
-            description TEXT DEFAULT '',
-            status INTEGER DEFAULT 1,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(191) NOT NULL DEFAULT '',
+            account_name VARCHAR(191) DEFAULT '',
+            secret_id VARCHAR(255) NOT NULL DEFAULT '',
+            secret_key VARCHAR(255) NOT NULL DEFAULT '',
+            description TEXT NULL,
+            status TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         
         // 创建或确保 powerdns_accounts 表存在
         $db->exec("CREATE TABLE IF NOT EXISTS powerdns_accounts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL DEFAULT '',
-            account_name TEXT DEFAULT '',
-            api_url TEXT NOT NULL DEFAULT '',
-            api_key TEXT NOT NULL DEFAULT '',
-            server_id TEXT DEFAULT 'localhost',
-            description TEXT DEFAULT '',
-            status INTEGER DEFAULT 1,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(191) NOT NULL DEFAULT '',
+            account_name VARCHAR(191) DEFAULT '',
+            api_url VARCHAR(255) NOT NULL DEFAULT '',
+            api_key TEXT NOT NULL,
+            server_id VARCHAR(191) DEFAULT 'localhost',
+            description TEXT NULL,
+            status TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         
         // 确保 domains 表支持自定义渠道
         $domain_columns = [];
-        $result = $db->query("PRAGMA table_info(domains)");
+        $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'domains'");
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
             $domain_columns[] = $row['name'];
         }

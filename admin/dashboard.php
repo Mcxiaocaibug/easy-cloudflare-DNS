@@ -28,10 +28,8 @@ $invitations_exists = (int)$db->querySingle("SELECT COUNT(*) FROM information_sc
         
         // 检查used_by字段是否存在
         $columns = [];
-        $result = $db->query("PRAGMA table_info(invitations)");
-        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-            $columns[] = $row['name'];
-        }
+        $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'invitations' ORDER BY ORDINAL_POSITION");
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $columns[] = $row['name']; }
         
         if (in_array('used_by', $columns)) {
             $stats['used_invitations'] = $db->querySingle("SELECT COUNT(*) FROM invitations WHERE used_by IS NOT NULL");
@@ -63,10 +61,8 @@ if ($card_keys_exists) {
     
     // 检查used_by字段是否存在
     $card_columns = [];
-    $result = $db->query("PRAGMA table_info(card_keys)");
-    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-        $card_columns[] = $row['name'];
-    }
+    $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'card_keys' ORDER BY ORDINAL_POSITION");
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $card_columns[] = $row['name']; }
     
     if (in_array('used_by', $card_columns)) {
         $stats['used_card_keys'] = $db->querySingle("SELECT COUNT(*) FROM card_keys WHERE used_by IS NOT NULL");
@@ -211,10 +207,8 @@ include 'includes/header.php';
             <?php 
             // 检查是否需要迁移邀请系统
             $columns = [];
-            $result = $db->query("PRAGMA table_info(invitations)");
-            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-                $columns[] = $row['name'];
-            }
+            $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'invitations' ORDER BY ORDINAL_POSITION");
+            while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $columns[] = $row['name']; }
             $needs_migration = !in_array('is_active', $columns);
             if ($needs_migration): 
             ?>

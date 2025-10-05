@@ -72,7 +72,7 @@ $stats = [
     'total_uses' => $db->querySingle("SELECT COUNT(*) FROM invitation_uses"),
     'unique_invited_users' => $db->querySingle("SELECT COUNT(DISTINCT invitee_id) FROM invitation_uses"),
     'total_rewards_given' => $db->querySingle("SELECT SUM(total_rewards) FROM invitations") ?: 0,
-    'active_inviters_30d' => $db->querySingle("SELECT COUNT(DISTINCT i.inviter_id) FROM invitations i JOIN invitation_uses iu ON i.id = iu.invitation_id WHERE iu.used_at >= date('now', '-30 days')"),
+    'active_inviters_30d' => $db->querySingle("SELECT COUNT(DISTINCT i.inviter_id) FROM invitations i JOIN invitation_uses iu ON i.id = iu.invitation_id WHERE iu.used_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"),
     'avg_uses_per_code' => $db->querySingle("SELECT AVG(use_count) FROM invitations WHERE use_count > 0") ?: 0,
     'top_inviter' => $db->querySingle("SELECT u.username FROM users u JOIN invitations i ON u.id = i.inviter_id ORDER BY i.total_rewards DESC LIMIT 1", true)
 ];
