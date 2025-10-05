@@ -70,7 +70,7 @@ class PDOCompatDB {
             $stmt = $this->pdo->query("SELECT '" . ($exists ? $table : '') . "' AS name");
             return new SQLite3ResultCompatible($stmt);
         }
-        if (preg_match('/SELECT\\s+COUNT\\(\\*\\)\\s+FROM\\s+sqlite_master\\s+WHERE\\s+type=\\'table\\'/i', $sql)) {
+        if (preg_match("/SELECT\\s+COUNT\\(\\*\\)\\s+FROM\\s+sqlite_master\\s+WHERE\\s+type='table'/i", $sql)) {
             $dbName = $this->currentDatabase();
             $stmt = $this->pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '".$dbName."'");
             return new SQLite3ResultCompatible($stmt);
