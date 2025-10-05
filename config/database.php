@@ -86,9 +86,9 @@ class PDOCompatDB {
         return new SQLite3ResultCompatible($stmt);
     }
     public function querySingle($sql, $entireRow = false) {
-        $stmt = $this->pdo->query($sql);
-        if (!$stmt) return null;
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $res = $this->query($sql);
+        if (!$res) return null;
+        $row = $res->fetchArray(SQLITE3_ASSOC);
         if (!$row) return null;
         return $entireRow ? $row : array_values($row)[0];
     }
