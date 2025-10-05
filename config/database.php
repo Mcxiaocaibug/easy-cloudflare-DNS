@@ -418,10 +418,10 @@ class Database {
             INDEX idx_ugd_domain (domain_id)
         ) $engine");
 
-        // 索引
-        $this->db->exec("CREATE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)");
-        $this->db->exec("CREATE INDEX IF NOT EXISTS idx_users_oauth_provider ON users(oauth_provider)");
-        $this->db->exec("CREATE INDEX IF NOT EXISTS idx_domains_provider_type ON domains(provider_type)");
+        // 索引（兼容低版本 MySQL，不使用 IF NOT EXISTS）
+        $this->ensureIndex('users', 'idx_users_github_id', 'github_id');
+        $this->ensureIndex('users', 'idx_users_oauth_provider', 'oauth_provider');
+        $this->ensureIndex('domains', 'idx_domains_provider_type', 'provider_type');
 
         // 创建默认管理员（如果未安装）
         if (!file_exists(__DIR__ . '/../data/install.lock')) {
@@ -515,6 +515,23 @@ class Database {
                 $stmt->bindValue(7, $group[6], SQLITE3_INTEGER);
                 $stmt->execute();
             }
+        }
+    }
+
+    // 安全创建索引（若不存在）
+    private function ensureIndex($table, $indexName, $columns, $unique = false) {
+        try {
+            $pdo = $this->db->getPDO();
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?");
+            $stmt->execute([$table, $indexName]);
+            $exists = (int)$stmt->fetchColumn() > 0;
+            if (!$exists) {
+                $sql = ($unique ? 'CREATE UNIQUE INDEX ' : 'CREATE INDEX ') . $indexName . ' ON ' . $table . ' (' . $columns . ')';
+                $pdo->exec($sql);
+            }
+        } catch (Throwable $e) {
+            // 不阻断安装流程，记录日志
+            error_log('ensureIndex failed: ' . $e->getMessage());
         }
     }
 }
