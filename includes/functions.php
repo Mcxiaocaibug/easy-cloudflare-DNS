@@ -190,16 +190,16 @@ function updateSetting($key, $value) {
 function logAction($user_type, $user_id, $action, $details = '') {
     $db = Database::getInstance()->getConnection();
     
-    // 创建日志表（如果不存在）
+    // 创建日志表（如果不存在） - MySQL 语法
     $db->exec("CREATE TABLE IF NOT EXISTS action_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_type TEXT NOT NULL,
-        user_id INTEGER NOT NULL,
-        action TEXT NOT NULL,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_type VARCHAR(32) NOT NULL,
+        user_id INT NOT NULL,
+        action VARCHAR(191) NOT NULL,
         details TEXT,
-        ip_address TEXT,
+        ip_address VARCHAR(64),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )");
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     
     $stmt = $db->prepare("INSERT INTO action_logs (user_type, user_id, action, details, ip_address) VALUES (?, ?, ?, ?, ?)");
     $stmt->bindValue(1, $user_type, SQLITE3_TEXT);

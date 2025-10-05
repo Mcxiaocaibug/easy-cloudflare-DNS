@@ -9,14 +9,14 @@ $db = Database::getInstance()->getConnection();
 
 // 确保日志表存在
 $db->exec("CREATE TABLE IF NOT EXISTS action_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_type TEXT NOT NULL,
-    user_id INTEGER NOT NULL,
-    action TEXT NOT NULL,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_type VARCHAR(32) NOT NULL,
+    user_id INT NOT NULL,
+    action VARCHAR(191) NOT NULL,
     details TEXT,
-    ip_address TEXT,
+    ip_address VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)");
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 // 获取操作日志
 $logs = [];
