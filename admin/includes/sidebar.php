@@ -120,7 +120,7 @@
                 // 检查是否需要显示迁移工具
                 $db = Database::getInstance()->getConnection();
                 $columns = [];
-                $result = $db->query("PRAGMA table_info(invitations)");
+                $result = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'invitations' ORDER BY ORDINAL_POSITION");
                 while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
                     $columns[] = $row['name'];
                 }

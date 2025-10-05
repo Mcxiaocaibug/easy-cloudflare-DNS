@@ -21,11 +21,11 @@ class DatabaseMigrations {
      */
     private function initMigrationsTable() {
         $this->db->exec("CREATE TABLE IF NOT EXISTS database_migrations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            migration_name TEXT NOT NULL UNIQUE,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            migration_name VARCHAR(191) NOT NULL UNIQUE,
             executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            success INTEGER DEFAULT 1
-        )");
+            success TINYINT(1) DEFAULT 1
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
     
     /**
@@ -83,10 +83,11 @@ class DatabaseMigrations {
      * 检查迁移是否已执行
      */
     private function isMigrationExecuted($name) {
-        $count = $this->db->querySingle(
-            "SELECT COUNT(*) FROM database_migrations WHERE migration_name = ? AND success = 1",
-            [$name]
-        );
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM database_migrations WHERE migration_name = ? AND success = 1");
+        $stmt->bindValue(1, $name, SQLITE3_TEXT);
+        $res = $stmt->execute();
+        $row = $res->fetchArray(SQLITE3_NUM);
+        $count = $row ? (int)$row[0] : 0;
         return $count > 0;
     }
     
@@ -94,9 +95,9 @@ class DatabaseMigrations {
      * 标记迁移已执行
      */
     private function markMigrationExecuted($name, $success) {
-        $stmt = $this->db->prepare(
-            "INSERT OR REPLACE INTO database_migrations (migration_name, success) VALUES (?, ?)"
-        );
+        // 使用 ON DUPLICATE KEY UPDATE 模拟 REPLACE
+        $stmt = $this->db->prepare("INSERT INTO database_migrations (migration_name, success, executed_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE success = VALUES(success), executed_at = CURRENT_TIMESTAMP");
         $stmt->bindValue(1, $name, SQLITE3_TEXT);
         $stmt->bindValue(2, $success ? 1 : 0, SQLITE3_INTEGER);
         $stmt->execute();
@@ -137,10 +138,8 @@ class DatabaseMigrations {
         
         // 检查是否已经迁移过
         $columns = [];
-        $result = $this->db->query("PRAGMA table_info(invitations)");
-        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-            $columns[] = $row['name'];
-        }
+        $result = $this->db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'invitations' ORDER BY ORDINAL_POSITION");
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $columns[] = $row['name']; }
         
         if (in_array('is_active', $columns)) {
             echo "  - 邀请系统已是最新版本\n";
@@ -153,28 +152,25 @@ class DatabaseMigrations {
         echo "  - 创建新的邀请表结构\n";
         $this->db->exec("DROP TABLE IF EXISTS invitations_new");
         $this->db->exec("CREATE TABLE invitations_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            inviter_id INTEGER NOT NULL,
-            invitation_code TEXT NOT NULL UNIQUE,
-            reward_points INTEGER DEFAULT 0,
-            use_count INTEGER DEFAULT 0,
-            total_rewards INTEGER DEFAULT 0,
-            is_active INTEGER DEFAULT 1,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            inviter_id INT NOT NULL,
+            invitation_code VARCHAR(191) NOT NULL UNIQUE,
+            reward_points INT DEFAULT 0,
+            use_count INT DEFAULT 0,
+            total_rewards INT DEFAULT 0,
+            is_active TINYINT(1) DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_used_at TIMESTAMP DEFAULT NULL,
-            FOREIGN KEY (inviter_id) REFERENCES users(id)
-        )");
+            last_used_at TIMESTAMP NULL DEFAULT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         
         echo "  - 创建邀请使用记录表\n";
         $this->db->exec("CREATE TABLE IF NOT EXISTS invitation_uses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            invitation_id INTEGER NOT NULL,
-            invitee_id INTEGER NOT NULL,
-            reward_points INTEGER DEFAULT 0,
-            used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (invitation_id) REFERENCES invitations(id),
-            FOREIGN KEY (invitee_id) REFERENCES users(id)
-        )");
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            invitation_id INT NOT NULL,
+            invitee_id INT NOT NULL,
+            reward_points INT DEFAULT 0,
+            used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         
         echo "  - 迁移现有邀请数据\n";
         $oldInvitations = [];
@@ -215,8 +211,8 @@ class DatabaseMigrations {
         }
         
         echo "  - 替换旧表结构\n";
-        $this->db->exec("DROP TABLE invitations");
-        $this->db->exec("ALTER TABLE invitations_new RENAME TO invitations");
+        $this->db->exec("DROP TABLE IF EXISTS invitations");
+        $this->db->exec("RENAME TABLE invitations_new TO invitations");
         
         $migrated_count = count($oldInvitations);
         $active_count = $this->db->querySingle("SELECT COUNT(*) FROM invitations WHERE is_active = 1");
@@ -235,10 +231,8 @@ class DatabaseMigrations {
         
         // 检查users表是否已有OAuth字段
         $columns = [];
-        $result = $this->db->query("PRAGMA table_info(users)");
-        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-            $columns[] = $row['name'];
-        }
+        $result = $this->db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' ORDER BY ORDINAL_POSITION");
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $columns[] = $row['name']; }
         
         // 添加OAuth相关字段
         $oauth_fields = [
@@ -258,8 +252,8 @@ class DatabaseMigrations {
         
         // 创建索引
         echo "  - 创建OAuth索引\n";
-        $this->db->exec("CREATE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)");
-        $this->db->exec("CREATE INDEX IF NOT EXISTS idx_users_oauth_provider ON users(oauth_provider)");
+        $this->ensureIndex('users','idx_users_github_id','github_id');
+        $this->ensureIndex('users','idx_users_oauth_provider','oauth_provider');
         
         // 添加GitHub OAuth设置
         echo "  - 添加OAuth系统设置\n";
@@ -302,10 +296,8 @@ class DatabaseMigrations {
         
         foreach ($upgrades as $table => $fields) {
             $columns = [];
-            $result = $this->db->query("PRAGMA table_info({$table})");
-            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-                $columns[] = $row['name'];
-            }
+            $result = $this->db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '{$table}' ORDER BY ORDINAL_POSITION");
+            while ($row = $result->fetchArray(SQLITE3_ASSOC)) { $columns[] = $row['name']; }
             
             foreach ($fields as $field => $definition) {
                 if (!in_array($field, $columns)) {
@@ -316,19 +308,26 @@ class DatabaseMigrations {
         }
         
         // 创建必要的索引
-        $indexes = [
-            'idx_dns_records_domain' => 'CREATE INDEX IF NOT EXISTS idx_dns_records_domain ON dns_records(domain_id)',
-            'idx_dns_records_type' => 'CREATE INDEX IF NOT EXISTS idx_dns_records_type ON dns_records(type)',
-            'idx_logs_created' => 'CREATE INDEX IF NOT EXISTS idx_logs_created ON logs(created_at)',
-            'idx_users_email' => 'CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)'
-        ];
-        
-        foreach ($indexes as $name => $sql) {
-            echo "  - 创建索引: {$name}\n";
-            $this->db->exec($sql);
-        }
+        $this->ensureIndex('dns_records','idx_dns_records_domain','domain_id');
+        $this->ensureIndex('dns_records','idx_dns_records_type','type');
+        $this->ensureIndex('logs','idx_logs_created','created_at');
+        $this->ensureIndex('users','idx_users_email','email');
         
         return true;
+    }
+
+    private function ensureIndex($table, $indexName, $columns) {
+        try {
+            $pdo = $this->db->getPDO();
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?");
+            $stmt->execute([$table, $indexName]);
+            $exists = (int)$stmt->fetchColumn();
+            if (!$exists) {
+                $pdo->exec("CREATE INDEX {$indexName} ON {$table} ({$columns})");
+            }
+        } catch (Exception $e) {
+            error_log('ensureIndex in migrations failed: '.$e->getMessage());
+        }
     }
     
     /**

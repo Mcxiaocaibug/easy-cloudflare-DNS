@@ -89,15 +89,11 @@ function initializeUserGroupTables($db) {
         }
         
         // 3. 检查 users 表是否有 group_id 字段
-        $columns = $db->query("PRAGMA table_info(users)");
+        $columns_rs = $db->query("SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users'");
         $has_group_id = false;
-        
-        if ($columns) {
-            while ($column = $columns->fetchArray(SQLITE3_ASSOC)) {
-                if ($column['name'] === 'group_id') {
-                    $has_group_id = true;
-                    break;
-                }
+        if ($columns_rs) {
+            while ($column = $columns_rs->fetchArray(SQLITE3_ASSOC)) {
+                if ($column['name'] === 'group_id') { $has_group_id = true; break; }
             }
         }
         
@@ -105,7 +101,14 @@ function initializeUserGroupTables($db) {
             $db->exec("ALTER TABLE users ADD COLUMN group_id INT DEFAULT 1");
             $db->exec("ALTER TABLE users ADD COLUMN group_changed_at TIMESTAMP NULL DEFAULT NULL");
             $db->exec("ALTER TABLE users ADD COLUMN group_changed_by INT DEFAULT NULL");
-            $db->exec("CREATE INDEX idx_users_group_id ON users(group_id)");
+            try {
+                $pdo = $db->getPDO();
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'users' AND index_name = 'idx_users_group_id'");
+                $stmt->execute();
+                if (!(int)$stmt->fetchColumn()) {
+                    $pdo->exec("CREATE INDEX idx_users_group_id ON users(group_id)");
+                }
+            } catch (Exception $e) {}
         }
         
         // 4. 创建索引
