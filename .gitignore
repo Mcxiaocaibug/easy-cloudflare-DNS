@@ -1,0 +1,73 @@
+# 数据库文件
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/install.lock
+
+# 环境配置
+.env
+.env.local
+.env.*.local
+
+# 日志文件
+*.log
+logs/
+data/logs/
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 依赖
+vendor/
+node_modules/
+composer.lock
+package-lock.json
+
+# 备份文件
+*.bak
+*.backup
+*.sql.gz
+*.sql.bz2
+backup-*.sql
+
+# Docker
+.docker/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# PHP
+.phpunit.result.cache
+
+# 配置文件（保留示例文件）
+config/database.php
+config/cloudflare.php
+config/github_oauth.php
+config/smtp.php
+config/dnspod.php
+config/powerdns.php
+
+# 图片上传
+qrcode_*.jpg
+qrcode_*.png
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+

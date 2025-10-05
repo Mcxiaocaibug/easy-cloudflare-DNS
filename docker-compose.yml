@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # MySQL数据库服务
+  mysql:
+    image: mysql:8.0
+    container_name: cloudflare-dns-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password_123}
+      MYSQL_DATABASE: ${DB_NAME:-cloudflare_dns}
+      MYSQL_USER: ${DB_USER:-cloudflare}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-cloudflare_password_123}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - cloudflare-dns-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-root_password_123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PHP应用服务
+  app:
+    build: .
+    container_name: cloudflare-dns-app
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # 数据库配置 - 支持 DSN 或分离变量
+      DATABASE_URL: ${DATABASE_URL:-mysql://cloudflare:cloudflare_password_123@mysql:3306/cloudflare_dns}
+      DB_TYPE: ${DB_TYPE:-mysql}
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-cloudflare_dns}
+      DB_USER: ${DB_USER:-cloudflare}
+      DB_PASSWORD: ${DB_PASSWORD:-cloudflare_password_123}
+      DB_CHARSET: ${DB_CHARSET:-utf8mb4}
+      
+      # 管理员配置（初始化时使用）
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123456}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      
+      # 系统配置
+      SITE_NAME: ${SITE_NAME:-Cloudflare DNS管理系统}
+      POINTS_PER_RECORD: ${POINTS_PER_RECORD:-1}
+      DEFAULT_USER_POINTS: ${DEFAULT_USER_POINTS:-100}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-1}
+      
+      # 邀请系统配置
+      INVITATION_ENABLED: ${INVITATION_ENABLED:-1}
+      INVITATION_REWARD_POINTS: ${INVITATION_REWARD_POINTS:-10}
+      INVITEE_BONUS_POINTS: ${INVITEE_BONUS_POINTS:-5}
+      
+      # SMTP配置
+      SMTP_ENABLED: ${SMTP_ENABLED:-0}
+      SMTP_HOST: ${SMTP_HOST:-smtp.example.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SECURE: ${SMTP_SECURE:-ssl}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-六趣DNS}
+      SMTP_DEBUG: ${SMTP_DEBUG:-0}
+      
+      # 时区设置
+      TZ: Asia/Shanghai
+      
+      # 是否自动安装
+      AUTO_INSTALL: ${AUTO_INSTALL:-1}
+    volumes:
+      - app_data:/var/www/html/data
+      - ./config:/var/www/html/config
+    ports:
+      - "${APP_PORT:-8080}:80"
+    networks:
+      - cloudflare-dns-network
+
+networks:
+  cloudflare-dns-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  app_data:
+    driver: local
+
