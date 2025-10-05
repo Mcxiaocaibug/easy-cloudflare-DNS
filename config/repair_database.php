@@ -24,7 +24,7 @@ function repairDatabase() {
         ];
         
         $existingTables = [];
-        $result = $db->query("SELECT name FROM sqlite_master WHERE type='table'");
+        $result = $db->query("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE()");
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
             $existingTables[] = $row['name'];
         }

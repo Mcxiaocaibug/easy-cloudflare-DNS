@@ -80,7 +80,7 @@ $stats = [
     'total_users' => $db->querySingle("SELECT COUNT(*) FROM users"),
     'total_domains' => $db->querySingle("SELECT COUNT(*) FROM domains WHERE status = 1"),
     'total_records' => $db->querySingle("SELECT COUNT(*) FROM dns_records WHERE status = 1"),
-    'active_today' => $db->querySingle("SELECT COUNT(DISTINCT user_id) FROM dns_records WHERE DATE(created_at) = DATE('now')")
+    'active_today' => $db->querySingle("SELECT COUNT(DISTINCT user_id) FROM dns_records WHERE DATE(created_at) = CURDATE()")
 ];
 ?>
 <!DOCTYPE html>

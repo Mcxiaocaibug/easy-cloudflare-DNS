@@ -118,7 +118,7 @@ class DatabaseMigrations {
         ];
         
         foreach ($tables as $table) {
-            $exists = $this->db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='{$table}'");
+            $exists = (int)$this->db->querySingle("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '{$table}'");
             if (!$exists) {
                 echo "  - 创建表: {$table}\n";
                 // 这里应该包含具体的CREATE TABLE语句

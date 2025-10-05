@@ -14,15 +14,15 @@ $stats = [
     'total_records' => $db->querySingle("SELECT COUNT(*) FROM dns_records"),
     'active_users' => $db->querySingle("SELECT COUNT(*) FROM users WHERE status = 1"),
     'inactive_users' => $db->querySingle("SELECT COUNT(*) FROM users WHERE status = 0"),
-    'today_records' => $db->querySingle("SELECT COUNT(*) FROM dns_records WHERE date(created_at) = date('now')"),
-    'this_week_users' => $db->querySingle("SELECT COUNT(*) FROM users WHERE created_at >= date('now', '-7 days')"),
+    'today_records' => $db->querySingle("SELECT COUNT(*) FROM dns_records WHERE DATE(created_at) = CURDATE()"),
+    'this_week_users' => $db->querySingle("SELECT COUNT(*) FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"),
     'total_points' => $db->querySingle("SELECT SUM(points) FROM users") ?: 0
 ];
 
 // 获取邀请统计（如果启用）
 if (getSetting('invitation_enabled', '1')) {
     // 检查invitations表是否存在以及字段结构
-    $invitations_exists = $db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='invitations'");
+$invitations_exists = (int)$db->querySingle("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'invitations'");
     if ($invitations_exists) {
         $stats['total_invitations'] = $db->querySingle("SELECT COUNT(*) FROM invitations");
         
@@ -57,7 +57,7 @@ if (getSetting('invitation_enabled', '1')) {
 }
 
 // 获取卡密统计
-$card_keys_exists = $db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='card_keys'");
+$card_keys_exists = (int)$db->querySingle("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'card_keys'");
 if ($card_keys_exists) {
     $stats['total_card_keys'] = $db->querySingle("SELECT COUNT(*) FROM card_keys");
     
@@ -93,7 +93,7 @@ if ($stats['total_domains'] > 0) {
 $weekly_registrations = [];
 for ($i = 6; $i >= 0; $i--) {
     $date = date('Y-m-d', strtotime("-$i days"));
-    $count = $db->querySingle("SELECT COUNT(*) FROM users WHERE date(created_at) = '$date'");
+    $count = $db->querySingle("SELECT COUNT(*) FROM users WHERE DATE(created_at) = '$date'");
     $weekly_registrations[] = ['date' => $date, 'count' => $count];
 }
 
@@ -191,10 +191,10 @@ include 'includes/header.php';
             <?php 
             // 检查数据完整性并显示提示
             $missing_features = [];
-            if (!$db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='invitations'")) {
+            if (!(int)$db->querySingle("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'invitations'")) {
                 $missing_features[] = '邀请系统';
             }
-            if (!$db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='card_keys'")) {
+            if (!(int)$db->querySingle("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'card_keys'")) {
                 $missing_features[] = '卡密系统';
             }
             

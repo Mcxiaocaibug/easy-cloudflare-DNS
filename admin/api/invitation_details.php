@@ -39,7 +39,7 @@ try {
     // 获取邀请详情
     $sql = "SELECT i.*, u.username as inviter_username, u.points as inviter_points
             FROM invitations i
-            LEFT JOIN users u ON i.user_id = u.id
+            LEFT JOIN users u ON i.inviter_id = u.id
             WHERE $where_clause";
     
     $stmt = $db->prepare($sql);
@@ -54,11 +54,11 @@ try {
     }
     
     // 获取使用历史
-    $history_sql = "SELECT ih.*, u.username as invitee_username
-                    FROM invitation_history ih
-                    LEFT JOIN users u ON ih.invitee_id = u.id
-                    WHERE ih.invitation_id = ?
-                    ORDER BY ih.used_at DESC
+    $history_sql = "SELECT iu.*, u.username as invitee_username
+                    FROM invitation_uses iu
+                    LEFT JOIN users u ON iu.invitee_id = u.id
+                    WHERE iu.invitation_id = ?
+                    ORDER BY iu.used_at DESC
                     LIMIT 20";
     
     $history_stmt = $db->prepare($history_sql);
@@ -82,7 +82,7 @@ try {
                     SUM(reward_points) as total_rewards,
                     MAX(used_at) as last_used_at,
                     MIN(used_at) as first_used_at
-                  FROM invitation_history 
+                  FROM invitation_uses 
                   WHERE invitation_id = ?";
     
     $stats_stmt = $db->prepare($stats_sql);
@@ -92,8 +92,8 @@ try {
     
     // 获取最近30天的使用情况
     $recent_sql = "SELECT DATE(used_at) as date, COUNT(*) as count
-                   FROM invitation_history 
-                   WHERE invitation_id = ? AND used_at >= datetime('now', '-30 days')
+                   FROM invitation_uses 
+                   WHERE invitation_id = ? AND used_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
                    GROUP BY DATE(used_at)
                    ORDER BY date DESC";
     

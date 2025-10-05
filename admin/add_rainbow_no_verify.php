@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $stmt = $db->prepare("
             INSERT INTO rainbow_accounts (name, account_name, api_key, email, api_base_url, provider_uid, description, status, created_at) 
-            VALUES (?, ?, ?, '', ?, ?, ?, 1, datetime('now'))
+            VALUES (?, ?, ?, '', ?, ?, ?, 1, NOW())
         ");
         $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
         $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
@@ -150,4 +150,3 @@ include 'includes/header.php';
 </div>
 
 <?php include 'includes/footer.php'; ?>
-

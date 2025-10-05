@@ -30,7 +30,7 @@ try {
     $user_id = $_SESSION['user_id'];
     
     // 获取用户的邀请详情（只能查看自己的）
-    $sql = "SELECT * FROM invitations WHERE user_id = ? AND invitation_code = ?";
+    $sql = "SELECT * FROM invitations WHERE inviter_id = ? AND invitation_code = ?";
     $stmt = $db->prepare($sql);
     $stmt->bindValue(1, $user_id);
     $stmt->bindValue(2, $invitation_code);
@@ -44,11 +44,11 @@ try {
     }
     
     // 获取使用历史
-    $history_sql = "SELECT ih.*, u.username as invitee_username
-                    FROM invitation_history ih
-                    LEFT JOIN users u ON ih.invitee_id = u.id
-                    WHERE ih.invitation_id = ?
-                    ORDER BY ih.used_at DESC
+    $history_sql = "SELECT iu.*, u.username as invitee_username
+                    FROM invitation_uses iu
+                    LEFT JOIN users u ON iu.invitee_id = u.id
+                    WHERE iu.invitation_id = ?
+                    ORDER BY iu.used_at DESC
                     LIMIT 50";
     
     $history_stmt = $db->prepare($history_sql);
@@ -72,7 +72,7 @@ try {
                     SUM(reward_points) as total_rewards,
                     MAX(used_at) as last_used_at,
                     MIN(used_at) as first_used_at
-                  FROM invitation_history 
+                  FROM invitation_uses 
                   WHERE invitation_id = ?";
     
     $stats_stmt = $db->prepare($stats_sql);
@@ -82,7 +82,7 @@ try {
     
     // 获取最近7天的使用情况
     $recent_sql = "SELECT DATE(used_at) as date, COUNT(*) as count
-                   FROM invitation_history 
+                   FROM invitation_uses 
                    WHERE invitation_id = ? AND used_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
                    GROUP BY DATE(used_at)
                    ORDER BY date DESC";

@@ -26,25 +26,25 @@ function initializeUserGroupTables($db) {
     try {
         // 1. 检查 user_groups 表是否存在
         $table_exists = $db->querySingle("
-            SELECT COUNT(*) FROM sqlite_master 
-            WHERE type='table' AND name='user_groups'
+            SELECT COUNT(*) FROM information_schema.tables 
+            WHERE table_schema = DATABASE() AND table_name = 'user_groups'
         ");
         
         if (!$table_exists) {
             // 创建用户组表
             $db->exec("CREATE TABLE user_groups (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                group_name TEXT NOT NULL UNIQUE,
-                display_name TEXT NOT NULL,
-                points_per_record INTEGER DEFAULT 1,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                group_name VARCHAR(64) NOT NULL UNIQUE,
+                display_name VARCHAR(128) NOT NULL,
+                points_per_record INT DEFAULT 1,
                 description TEXT DEFAULT '',
-                is_active INTEGER DEFAULT 1,
-                can_access_all_domains INTEGER DEFAULT 0,
-                max_records INTEGER DEFAULT -1,
-                priority INTEGER DEFAULT 0,
+                is_active TINYINT(1) DEFAULT 1,
+                can_access_all_domains TINYINT(1) DEFAULT 0,
+                max_records INT DEFAULT -1,
+                priority INT DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )");
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             
             // 插入默认数据
             $default_groups = [
@@ -72,20 +72,20 @@ function initializeUserGroupTables($db) {
         
         // 2. 检查 user_group_domains 表是否存在
         $table_exists = $db->querySingle("
-            SELECT COUNT(*) FROM sqlite_master 
-            WHERE type='table' AND name='user_group_domains'
+            SELECT COUNT(*) FROM information_schema.tables 
+            WHERE table_schema = DATABASE() AND table_name = 'user_group_domains'
         ");
         
         if (!$table_exists) {
             $db->exec("CREATE TABLE user_group_domains (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                group_id INTEGER NOT NULL,
-                domain_id INTEGER NOT NULL,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                group_id INT NOT NULL,
+                domain_id INT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (group_id) REFERENCES user_groups(id) ON DELETE CASCADE,
-                FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
-                UNIQUE(group_id, domain_id)
-            )");
+                UNIQUE KEY uniq_group_domain (group_id, domain_id),
+                INDEX idx_ugd_group (group_id),
+                INDEX idx_ugd_domain (domain_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         }
         
         // 3. 检查 users 表是否有 group_id 字段
@@ -102,10 +102,10 @@ function initializeUserGroupTables($db) {
         }
         
         if (!$has_group_id) {
-            $db->exec("ALTER TABLE users ADD COLUMN group_id INTEGER DEFAULT 1");
-            $db->exec("ALTER TABLE users ADD COLUMN group_changed_at TIMESTAMP DEFAULT NULL");
-            $db->exec("ALTER TABLE users ADD COLUMN group_changed_by INTEGER DEFAULT NULL");
-            $db->exec("CREATE INDEX IF NOT EXISTS idx_users_group_id ON users(group_id)");
+            $db->exec("ALTER TABLE users ADD COLUMN group_id INT DEFAULT 1");
+            $db->exec("ALTER TABLE users ADD COLUMN group_changed_at TIMESTAMP NULL DEFAULT NULL");
+            $db->exec("ALTER TABLE users ADD COLUMN group_changed_by INT DEFAULT NULL");
+            $db->exec("CREATE INDEX idx_users_group_id ON users(group_id)");
         }
         
         // 4. 创建索引

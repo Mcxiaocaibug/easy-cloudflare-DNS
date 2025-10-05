@@ -119,13 +119,13 @@ if (!in_array($client_ip, $allowed_ips) && !isset($_GET['force'])) {
             
             // 检查表数量
             $table_count = 0;
-            $result = $db->query("SELECT COUNT(*) FROM sqlite_master WHERE type='table'");
+            $result = $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()");
             if ($result) {
                 $table_count = $result->fetchArray(SQLITE3_NUM)[0];
             }
             
             // 检查版本表
-            $version_table_exists = $db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='database_versions'");
+            $version_table_exists = (int)$db->querySingle("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'database_versions'");
             $current_version = '未知';
             if ($version_table_exists) {
                 $current_version = $db->querySingle("SELECT version FROM database_versions ORDER BY id DESC LIMIT 1") ?: '0.0.0';
@@ -189,7 +189,7 @@ if (!in_array($client_ip, $allowed_ips) && !isset($_GET['force'])) {
                     
                     // 检查所有表
                     $tables = [];
-                    $result = $db->query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
+                    $result = $db->query("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY name");
                     while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
                         $tables[] = $row['name'];
                     }
