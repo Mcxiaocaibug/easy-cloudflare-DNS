@@ -1,52 +1,21 @@
 <?php
 /**
- * 数据库配置示例文件
- * 复制此文件为 database.php 并修改相应配置
+ * MySQL 配置示例
+ * 复制为 .env 或设置为环境变量：
+ *
+ * MYSQL_DSN="mysql:host=127.0.0.1;port=3306;dbname=cloudflare_dns;charset=utf8mb4"
+ * MYSQL_USER="root"
+ * MYSQL_PASSWORD="password"
+ *
+ * 或 URL 格式：
+ * MYSQL_DSN="mysql://root:password@127.0.0.1:3306/cloudflare_dns?charset=utf8mb4"
+ *
+ * Aiven TLS 示例：
+ * MYSQL_DSN="mysql://user:pass@host:port/db?charset=utf8mb4&ssl_ca=/certs/ca.pem&ssl_verify=1"
  */
 
-class Database {
-    private static $instance = null;
-    private $db;
+// 本文件仅作示例，实际运行请使用 config/database.php（已内置环境变量读取）
 
-    private function __construct() {
-        $db_file = __DIR__ . '/../data/cloudflare_dns.db';
-        
-        // 确保数据目录存在
-        $data_dir = dirname($db_file);
-        if (!is_dir($data_dir)) {
-            mkdir($data_dir, 0755, true);
-        }
-        
-        // 创建数据库连接并设置优化参数
-        $this->db = new SQLite3($db_file);
-        $this->db->enableExceptions(true);
-        
-        // 设置SQLite优化参数以减少锁定问题
-        $this->db->exec('PRAGMA journal_mode = WAL');
-        $this->db->exec('PRAGMA synchronous = NORMAL');
-        $this->db->exec('PRAGMA cache_size = 1000');
-        $this->db->exec('PRAGMA temp_store = MEMORY');
-        $this->db->exec('PRAGMA busy_timeout = 30000');
-        $this->db->exec('PRAGMA foreign_keys = ON');
-        
-        $this->initTables();
-    }
+require_once __DIR__ . '/database.php';
 
-    public static function getInstance() {
-        if (self::$instance === null) {
-            self::$instance = new Database();
-        }
-        return self::$instance;
-    }
-
-    public function getConnection() {
-        return $this->db;
-    }
-
-    private function initTables() {
-        // 数据库表初始化代码
-        // 实际配置请参考原始 database.php 文件
-        // 注意：dns_records 表应包含 remark, ttl, priority 等字段
-    }
-}
-?>
+// 使用：Database::getInstance()->getConnection();
