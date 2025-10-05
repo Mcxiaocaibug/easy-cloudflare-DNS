@@ -125,10 +125,71 @@ class Database {
             $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset={$charset}";
         }
         try {
-            $pdo = new PDO($dsn, $user, $pass, [
+            $driverOptions = [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8mb4'
-            ]);
+                PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8mb4',
+            ];
+
+            // 可选: TLS/SSL（Aiven 等托管 MySQL 常用）
+            $sslCa = getenv('MYSQL_SSL_CA') ?: '';
+            $sslCert = getenv('MYSQL_SSL_CERT') ?: '';
+            $sslKey = getenv('MYSQL_SSL_KEY') ?: '';
+            $sslVerify = getenv('MYSQL_SSL_VERIFY'); // 1/0，可选
+            $sslCipher = getenv('MYSQL_SSL_CIPHER') ?: '';
+
+            if ($sslCa !== '' && defined('PDO::MYSQL_ATTR_SSL_CA')) {
+                $driverOptions[PDO::MYSQL_ATTR_SSL_CA] = $sslCa;
+            }
+            if ($sslCert !== '' && defined('PDO::MYSQL_ATTR_SSL_CERT')) {
+                $driverOptions[PDO::MYSQL_ATTR_SSL_CERT] = $sslCert;
+            }
+            if ($sslKey !== '' && defined('PDO::MYSQL_ATTR_SSL_KEY')) {
+                $driverOptions[PDO::MYSQL_ATTR_SSL_KEY] = $sslKey;
+            }
+            if ($sslCipher !== '' && defined('PDO::MYSQL_ATTR_SSL_CIPHER')) {
+                $driverOptions[PDO::MYSQL_ATTR_SSL_CIPHER] = $sslCipher;
+            }
+            if ($sslVerify !== false && defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+                $driverOptions[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = (bool)(int)$sslVerify;
+            }
+
+            // 允许使用 URL 风格 DSN: mysql://user:pass@host:port/dbname?charset=utf8mb4&ssl_ca=/path/ca.pem
+            if ($dsn && preg_match('/^mysql:\/\//i', $dsn)) {
+                $parts = @parse_url($dsn);
+                if ($parts && !empty($parts['host'])) {
+                    $host = $parts['host'];
+                    $port = isset($parts['port']) ? $parts['port'] : '3306';
+                    $dbname = isset($parts['path']) ? ltrim($parts['path'], '/') : '';
+                    $queryParams = [];
+                    if (!empty($parts['query'])) parse_str($parts['query'], $queryParams);
+
+                    // 优先使用 URL 中的用户密码
+                    if (!$user && isset($parts['user'])) $user = urldecode($parts['user']);
+                    if (!$pass && isset($parts['pass'])) $pass = urldecode($parts['pass']);
+
+                    $charset = $queryParams['charset'] ?? (getenv('MYSQL_CHARSET') ?: 'utf8mb4');
+                    $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset={$charset}";
+
+                    // 从查询参数中读取 SSL 设置（优先级高于环境变量）
+                    if (isset($queryParams['ssl_ca']) && defined('PDO::MYSQL_ATTR_SSL_CA')) {
+                        $driverOptions[PDO::MYSQL_ATTR_SSL_CA] = $queryParams['ssl_ca'];
+                    }
+                    if (isset($queryParams['ssl_cert']) && defined('PDO::MYSQL_ATTR_SSL_CERT')) {
+                        $driverOptions[PDO::MYSQL_ATTR_SSL_CERT] = $queryParams['ssl_cert'];
+                    }
+                    if (isset($queryParams['ssl_key']) && defined('PDO::MYSQL_ATTR_SSL_KEY')) {
+                        $driverOptions[PDO::MYSQL_ATTR_SSL_KEY] = $queryParams['ssl_key'];
+                    }
+                    if (isset($queryParams['ssl_verify']) && defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+                        $driverOptions[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = (bool)(int)$queryParams['ssl_verify'];
+                    }
+                    if (isset($queryParams['ssl_cipher']) && defined('PDO::MYSQL_ATTR_SSL_CIPHER')) {
+                        $driverOptions[PDO::MYSQL_ATTR_SSL_CIPHER] = $queryParams['ssl_cipher'];
+                    }
+                }
+            }
+
+            $pdo = new PDO($dsn, $user, $pass, $driverOptions);
         } catch (Throwable $e) {
             throw new Exception('MySQL 连接失败，请检查环境变量 MYSQL_DSN/MYSQL_USER/MYSQL_PASSWORD: ' . $e->getMessage());
         }

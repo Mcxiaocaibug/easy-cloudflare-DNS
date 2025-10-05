@@ -142,17 +142,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
         case 2:
             // 数据库配置（MySQL DSN）
-            $mysql_dsn  = trim($_POST['mysql_dsn'] ?? (getenv('MYSQL_DSN') ?: ''));
-            $mysql_user = trim($_POST['mysql_user'] ?? (getenv('MYSQL_USER') ?: ''));
-            $mysql_pass = trim($_POST['mysql_password'] ?? (getenv('MYSQL_PASSWORD') ?: ''));
-            if (!$mysql_dsn) {
+            $mysql_dsn_input  = trim($_POST['mysql_dsn'] ?? (getenv('MYSQL_DSN') ?: ''));
+            $mysql_user_input = trim($_POST['mysql_user'] ?? (getenv('MYSQL_USER') ?: ''));
+            $mysql_pass_input = trim($_POST['mysql_password'] ?? (getenv('MYSQL_PASSWORD') ?: ''));
+            if (!$mysql_dsn_input) {
                 $error = '请填写或通过环境变量提供 MYSQL_DSN';
                 break;
             }
+            // 兼容 URL 风格 mysql://user:pass@host:port/dbname?charset=utf8mb4
+            $dsnTest = $mysql_dsn_input;
+            $userTest = $mysql_user_input;
+            $passTest = $mysql_pass_input;
+            if (preg_match('/^mysql:\/\//i', $mysql_dsn_input)) {
+                $parts = @parse_url($mysql_dsn_input);
+                if ($parts && !empty($parts['host'])) {
+                    $host = $parts['host'];
+                    $port = isset($parts['port']) ? $parts['port'] : '3306';
+                    $dbname = isset($parts['path']) ? ltrim($parts['path'], '/') : '';
+                    $queryParams = [];
+                    if (!empty($parts['query'])) parse_str($parts['query'], $queryParams);
+                    if (!$userTest && isset($parts['user'])) $userTest = urldecode($parts['user']);
+                    if (!$passTest && isset($parts['pass'])) $passTest = urldecode($parts['pass']);
+                    $charset = $queryParams['charset'] ?? 'utf8mb4';
+                    $dsnTest = "mysql:host={$host};port={$port};dbname={$dbname};charset={$charset}";
+                }
+            }
             try {
-                $pdo = new PDO($mysql_dsn, $mysql_user, $mysql_pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-                // 持久化到 .env
-                $env = "MYSQL_DSN=\"{$mysql_dsn}\"\nMYSQL_USER=\"{$mysql_user}\"\nMYSQL_PASSWORD=\"{$mysql_pass}\"\n";
+                $pdo = new PDO($dsnTest, $userTest, $passTest, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+                // 持久化到 .env（保留原始 DSN 字符串，支持 URL 格式）
+                $env = "MYSQL_DSN=\"{$mysql_dsn_input}\"\nMYSQL_USER=\"{$mysql_user_input}\"\nMYSQL_PASSWORD=\"{$mysql_pass_input}\"\n";
                 file_put_contents('.env', $env);
                 header('Location: install.php?step=3');
                 exit;
@@ -459,8 +477,8 @@ $env_ok = !in_array(false, $env_checks);
                         <form method="POST">
                             <div class="mb-3">
                                 <label class="form-label">MYSQL_DSN</label>
-                                <input type="text" class="form-control" name="mysql_dsn" placeholder="mysql:host=127.0.0.1;port=3306;dbname=cloudflare_dns;charset=utf8mb4" value="<?php echo htmlspecialchars($_POST['mysql_dsn'] ?? (getenv('MYSQL_DSN') ?: '')); ?>" required>
-                                <div class="form-text">例如：mysql:host=127.0.0.1;port=3306;dbname=cloudflare_dns;charset=utf8mb4</div>
+                                <input type="text" class="form-control" name="mysql_dsn" placeholder="mysql:host=127.0.0.1;port=3306;dbname=cloudflare_dns;charset=utf8mb4 或 mysql://user:pass@host:3306/dbname?charset=utf8mb4" value="<?php echo htmlspecialchars($_POST['mysql_dsn'] ?? (getenv('MYSQL_DSN') ?: '')); ?>" required>
+                                <div class="form-text">支持两种格式：<br>1) PDO DSN：mysql:host=127.0.0.1;port=3306;dbname=cloudflare_dns;charset=utf8mb4<br>2) URL DSN：mysql://user:pass@host:3306/dbname?charset=utf8mb4</div>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">MYSQL_USER</label>

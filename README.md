@@ -255,13 +255,20 @@ server {
 
 ### 环境变量一览
 
-- `MYSQL_DSN`：完整的 MySQL 连接 DSN。举例：`mysql:host=127.0.0.1;port=3306;dbname=cloudflare_dns;charset=utf8mb4`
+- `MYSQL_DSN`：完整的 MySQL 连接 DSN。支持两种格式：
+  - PDO DSN：`mysql:host=127.0.0.1;port=3306;dbname=cloudflare_dns;charset=utf8mb4`
+  - URL DSN：`mysql://user:pass@host:3306/dbname?charset=utf8mb4`（也支持 `ssl_ca`/`ssl_cert`/`ssl_key`/`ssl_verify`/`ssl_cipher` 查询参数）
 - `MYSQL_USER`：MySQL 用户名。默认无
 - `MYSQL_PASSWORD`：MySQL 密码。默认无
 - `MYSQL_HOST`：当未提供 `MYSQL_DSN` 时，用于拼装 DSN 的主机，默认 `localhost`
 - `MYSQL_PORT`：当未提供 `MYSQL_DSN` 时，用于拼装 DSN 的端口，默认 `3306`
 - `MYSQL_DATABASE`：当未提供 `MYSQL_DSN` 时，用于拼装 DSN 的库名，默认 `cloudflare_dns`
 - `MYSQL_CHARSET`：当未提供 `MYSQL_DSN` 时，用于拼装 DSN 的字符集，默认 `utf8mb4`
+- `MYSQL_SSL_CA`：可选，CA 证书路径（常用于 Aiven 等要求 TLS 的托管 MySQL）
+- `MYSQL_SSL_CERT`：可选，客户端证书路径（如服务端要求）
+- `MYSQL_SSL_KEY`：可选，客户端私钥路径（如服务端要求）
+- `MYSQL_SSL_VERIFY`：可选，`1/0` 是否校验服务端证书（如果提供 CA，一般置 1）
+- `MYSQL_SSL_CIPHER`：可选，指定 TLS Cipher
 - `AUTO_INSTALL`：`1` 启用无交互自动安装，默认 `0`
 - `INSTALL_AUTO`：`1` 别名，等价于 `AUTO_INSTALL=1`
 - `ADMIN_USERNAME`：自动安装管理员用户名，默认 `admin`
@@ -292,6 +299,22 @@ docker run -p 8080:80 \
 仓库已包含 `.github/workflows/docker.yml`，推送到 `main/master` 分支或打 `v*` 标签将自动构建并发布镜像到 GHCR：
 
 - `ghcr.io/<owner>/<repo>:<tag>`
+
+### Aiven MySQL 示例
+
+Aiven 的 MySQL 服务默认要求 TLS 连接。你可以从 Aiven 控制台下载 CA 证书，然后在容器中挂载并通过环境变量启用：
+
+```
+docker run -p 8080:80 \
+  -v $(pwd)/certs:/certs:ro \
+  -e MYSQL_DSN="mysql:host=<aiven-host>;port=<port>;dbname=<db>;charset=utf8mb4" \
+  -e MYSQL_USER="<user>" -e MYSQL_PASSWORD="<password>" \
+  -e MYSQL_SSL_CA="/certs/ca.pem" -e MYSQL_SSL_VERIFY=1 \
+  -e AUTO_INSTALL=1 -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=admin123456 \
+  cloudflare-dns:latest
+```
+
+如果需要客户端证书/私钥（较少见），再加上：`MYSQL_SSL_CERT=/certs/client-cert.pem`、`MYSQL_SSL_KEY=/certs/client-key.pem`。
 
 
 #### 3️⃣ 访问安装页面
