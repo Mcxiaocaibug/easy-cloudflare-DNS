@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y \
 
 # Configure Apache
 RUN a2enmod rewrite && \
-    sed -ri -e 's!/var/www/html!/var/www/html!g' /etc/apache2/sites-available/000-default.conf
+    sed -ri -e 's!/var/www/html!/var/www/html!g' /etc/apache2/sites-available/000-default.conf && \
+    printf "ServerName localhost\n" > /etc/apache2/conf-available/servername.conf && a2enconf servername
 
 WORKDIR /var/www/html
 
@@ -33,6 +34,11 @@ ENV MYSQL_DSN="" \
 
 EXPOSE 80
 
-# Default is to run Apache in foreground
-CMD ["apache2-foreground"]
+# Allow PaaS to set listening port via $PORT
+ENV PORT=80
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Default is to run Apache in foreground via our entrypoint
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["apache2-foreground"]
