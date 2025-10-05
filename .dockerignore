@@ -1,0 +1,17 @@
+git
+.git
+.gitignore
+node_modules
+npm-debug.log
+Dockerfile
+.github
+*.md
+*.MD
+*.markdown
+*.log
+tmp
+cache
+.DS_Store
+vendor
+composer.lock
+
