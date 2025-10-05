@@ -154,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])) {
             // 添加Cloudflare渠道
             $stmt = $db->prepare("
                 INSERT INTO cloudflare_accounts (name, account_name, api_key, email, description, status, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, ?, ?, ?, NOW())
             ");
             $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
             $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
@@ -193,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])) {
             
             $stmt = $db->prepare("
                 INSERT INTO rainbow_accounts (name, account_name, api_key, email, api_base_url, provider_uid, description, status, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
             ");
             $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
             $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
@@ -212,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])) {
             
             $stmt = $db->prepare("
                 INSERT INTO dnspod_accounts (name, account_name, secret_id, secret_key, description, status, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, ?, ?, ?, NOW())
             ");
             $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
             $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
@@ -229,7 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])) {
             
             $stmt = $db->prepare("
                 INSERT INTO powerdns_accounts (name, account_name, api_url, api_key, server_id, description, status, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
             ");
             $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
             $stmt->bindValue(2, $channel_name, SQLITE3_TEXT);
@@ -243,7 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])) {
             // 添加自定义渠道 - 存储在domains表中
             $stmt = $db->prepare("
                 INSERT INTO domains (domain_name, api_key, email, zone_id, provider_type, api_base_url, provider_uid, status, created_at) 
-                VALUES (?, ?, ?, ?, 'custom', ?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, ?, 'custom', ?, ?, ?, NOW())
             ");
             $stmt->bindValue(1, $channel_name, SQLITE3_TEXT);
             $stmt->bindValue(2, $api_key, SQLITE3_TEXT);

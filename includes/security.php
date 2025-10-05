@@ -12,15 +12,15 @@ class Security {
      */
     public static function recordFailedLogin($ip, $username, $type = 'user') {
         $db = Database::getInstance()->getConnection();
-        
-        // 创建登录失败记录表
+        // MySQL 语法创建表
         $db->exec("CREATE TABLE IF NOT EXISTS login_attempts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ip_address TEXT NOT NULL,
-            username TEXT NOT NULL,
-            type TEXT NOT NULL,
-            attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ip_address VARCHAR(64) NOT NULL,
+            username VARCHAR(191) NOT NULL,
+            type VARCHAR(32) NOT NULL,
+            attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            success TINYINT(1) DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         
         // 记录失败尝试
         $stmt = $db->prepare("INSERT INTO login_attempts (ip_address, username, type) VALUES (?, ?, ?)");
@@ -29,8 +29,8 @@ class Security {
         $stmt->bindValue(3, $type, SQLITE3_TEXT);
         $stmt->execute();
         
-        // 清理过期记录（保留24小时内的记录）
-        $db->exec("DELETE FROM login_attempts WHERE attempt_time < datetime('now', '-24 hours')");
+        // 清理过期记录（保留24小时内的记录）- MySQL 语法
+        $db->exec("DELETE FROM login_attempts WHERE attempt_time < DATE_SUB(NOW(), INTERVAL 24 HOUR)");
     }
     
     /**
@@ -39,8 +39,11 @@ class Security {
     public static function isIpLocked($ip, $type = 'user') {
         $db = Database::getInstance()->getConnection();
         
-        // 检查表是否存在
-        $table_exists = $db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='login_attempts'");
+        // 检查表是否存在（MySQL information_schema）
+        $pdo = $db->getPDO();
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'login_attempts'");
+        $stmt->execute();
+        $table_exists = (int)$stmt->fetchColumn();
         if (!$table_exists) {
             return false;
         }
@@ -65,8 +68,11 @@ class Security {
     public static function getRemainingLockTime($ip, $type = 'user') {
         $db = Database::getInstance()->getConnection();
         
-        // 检查表是否存在
-        $table_exists = $db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='login_attempts'");
+        // 检查表是否存在（MySQL information_schema）
+        $pdo = $db->getPDO();
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'login_attempts'");
+        $stmt->execute();
+        $table_exists = (int)$stmt->fetchColumn();
         if (!$table_exists) {
             return 0;
         }
@@ -95,8 +101,11 @@ class Security {
     public static function clearFailedAttempts($ip, $type = 'user') {
         $db = Database::getInstance()->getConnection();
         
-        // 检查表是否存在
-        $table_exists = $db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='login_attempts'");
+        // 检查表是否存在（MySQL information_schema）
+        $pdo = $db->getPDO();
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'login_attempts'");
+        $stmt->execute();
+        $table_exists = (int)$stmt->fetchColumn();
         if (!$table_exists) {
             return;
         }

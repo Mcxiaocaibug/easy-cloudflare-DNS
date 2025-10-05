@@ -83,7 +83,7 @@ try {
     // 获取最近7天的使用情况
     $recent_sql = "SELECT DATE(used_at) as date, COUNT(*) as count
                    FROM invitation_history 
-                   WHERE invitation_id = ? AND used_at >= datetime('now', '-7 days')
+                   WHERE invitation_id = ? AND used_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
                    GROUP BY DATE(used_at)
                    ORDER BY date DESC";
     

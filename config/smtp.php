@@ -138,17 +138,17 @@ class EmailService {
      * 保存验证码到数据库
      */
     private function saveVerificationCode($email, $code, $type, $user_id = null) {
-        // 创建验证码表（如果不存在）
+        // 创建验证码表（MySQL 语法）
         $this->db->exec("CREATE TABLE IF NOT EXISTS email_verifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL,
-            code TEXT NOT NULL,
-            type TEXT NOT NULL,
-            user_id INTEGER,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(255) NOT NULL,
+            code VARCHAR(64) NOT NULL,
+            type VARCHAR(32) NOT NULL,
+            user_id INT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             expires_at TIMESTAMP NOT NULL,
-            used INTEGER DEFAULT 0
-        )");
+            used TINYINT(1) DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         
         // 使验证码5分钟后过期
         $expires_at = date('Y-m-d H:i:s', time() + 300);
@@ -176,7 +176,7 @@ class EmailService {
     public function verifyCode($email, $code, $type) {
         $stmt = $this->db->prepare("
             SELECT id, user_id FROM email_verifications 
-            WHERE email = ? AND code = ? AND type = ? AND used = 0 AND expires_at > datetime('now')
+            WHERE email = ? AND code = ? AND type = ? AND used = 0 AND expires_at > NOW()
         ");
         $stmt->bindValue(1, $email, SQLITE3_TEXT);
         $stmt->bindValue(2, $code, SQLITE3_TEXT);

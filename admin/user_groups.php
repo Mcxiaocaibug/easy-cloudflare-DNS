@@ -186,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_group'])) {
                     priority = ?, 
                     description = ?, 
                     can_access_all_domains = ?,
-                    updated_at = datetime('now')
+                    updated_at = NOW()
                 WHERE id = ?
             ");
             $stmt->bindValue(1, $display_name, SQLITE3_TEXT);
@@ -634,4 +634,3 @@ if (isset($_GET['edit']) && !empty($_GET['edit'])) {
     </script>
 </body>
 </html>
-

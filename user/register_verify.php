@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_code'])) {
                 // 创建用户账户
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
                 
-                $stmt = $db->prepare("INSERT INTO users (username, email, password, credits, created_at) VALUES (?, ?, ?, 100, datetime('now'))");
+                $stmt = $db->prepare("INSERT INTO users (username, email, password, credits, created_at) VALUES (?, ?, ?, 100, NOW())");
                 $stmt->bindValue(1, $_SESSION['registration_username'], SQLITE3_TEXT);
                 $stmt->bindValue(2, $_SESSION['registration_email'], SQLITE3_TEXT);
                 $stmt->bindValue(3, $hashed_password, SQLITE3_TEXT);

@@ -248,7 +248,7 @@ class UserGroupManager {
             $stmt = $this->db->prepare("
                 UPDATE users 
                 SET group_id = ?, 
-                    group_changed_at = datetime('now'), 
+                    group_changed_at = NOW(), 
                     group_changed_by = ? 
                 WHERE id = ?
             ");
@@ -363,4 +363,3 @@ class UserGroupManager {
         }
     }
 }
-
